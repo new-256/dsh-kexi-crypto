@@ -1,0 +1,14 @@
+{
+  "_comment": "代币解锁计划本地登记（G7）。免费可靠解锁 API 不存在，故以手工登记为准；事件经 unlock_schedule.py 计算冲击分。新增代币：在 tokens 数组追加一项。日期 UTC。",
+  "tokens": [
+    {
+      "symbol": "2Z",
+      "total_supply": 1000000000,
+      "data_source": "manual",
+      "events": [
+        {"date": "2026-10-01", "name": "团队与早期投资人份额", "unlock_tokens": 178000000},
+        {"date": "2027-01-15", "name": "生态基金第一批", "unlock_tokens": 80000000}
+      ]
+    }
+  ]
+}

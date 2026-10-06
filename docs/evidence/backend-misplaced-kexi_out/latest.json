@@ -1,0 +1,10 @@
+{
+  "kind": "dashboard",
+  "report": "C:\\Users\\lcl\\Desktop\\K析工作文件夹\\kexi_out\\top20_report.json",
+  "dashboard": "C:\\Users\\lcl\\Desktop\\K析工作文件夹\\kexi_out\\top20_dashboard.html",
+  "klines": "C:\\Users\\lcl\\Desktop\\K析工作文件夹\\kexi_out\\picks\\GRAMUSDT_1d.json",
+  "schema": "kexi.latest/1",
+  "at": "2026-09-28T19:42:18.214Z",
+  "latest_path": "C:\\Users\\lcl\\AppData\\Roaming\\DSH Desktop\\backend\\dsh\\node_modules\\@deepseek-ai\\dsh\\lib\\kexi_out\\latest.json",
+  "note": "本次运行的权威产物。懒发现优先读本文件；不要按 mtime 猜哪份看板最新。"
+}

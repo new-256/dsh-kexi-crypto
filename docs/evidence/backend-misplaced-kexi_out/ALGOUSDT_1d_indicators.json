@@ -1,0 +1,375 @@
+{
+  "symbol": "ALGOUSDT",
+  "as_of": "2026-09-27 08:00 UTC+8",
+  "as_of_note": "as_of 为该 bar 的开盘时间；已剔除未收盘 bar",
+  "last_bar_open": "2026-09-27T08:00:00+08:00",
+  "last_bar_closed_at": "2026-09-28T08:00:00+08:00",
+  "dropped_open_bar": 0,
+  "close": 0.1195,
+  "bars": 219,
+  "ma": {
+    "ma5": 0.11432,
+    "ma10": 0.1108,
+    "ma20": 0.10222,
+    "ma60": 0.09188
+  },
+  "ema": {
+    "ema12": 0.10937,
+    "ema26": 0.10246
+  },
+  "ma_alignment": "bullish",
+  "price_vs_ma": {
+    "ma5": "above",
+    "ma10": "above",
+    "ma20": "above",
+    "ma60": "above"
+  },
+  "golden_dead_cross_recent": [
+    {
+      "type": "golden_cross",
+      "indicator": "MA5/MA20",
+      "bar_index": 210,
+      "date": "2026-09-19"
+    },
+    {
+      "type": "golden_cross",
+      "indicator": "MACD(DIF/DEA)",
+      "bar_index": 210,
+      "date": "2026-09-19"
+    }
+  ],
+  "macd": {
+    "dif": 0.0069104,
+    "dea": 0.0050386,
+    "hist": 0.0037436,
+    "hist_prev": 0.003722,
+    "above_zero": true,
+    "hist_expanding": true,
+    "hist_sign": "正",
+    "hist_direction": "扩张",
+    "hist_direction_steps": 4,
+    "hist_last6": [
+      0.0037359,
+      0.0027857,
+      0.0031202,
+      0.003508,
+      0.003722,
+      0.0037436
+    ]
+  },
+  "rsi": {
+    "rsi6": 75.7917,
+    "rsi14": 69.4689,
+    "state": "中性"
+  },
+  "divergence": {
+    "bearish_hint": "无",
+    "bullish_hint": "无"
+  },
+  "volatility": {
+    "atr14": 0.0075949,
+    "atr_pct": 6.3556,
+    "ann_vol_7d_pct": 88.6295,
+    "ann_vol_30d_pct": 77.688,
+    "max_dd_30d_pct": -11.8056
+  },
+  "performance": {
+    "pct_7d": 9.8346,
+    "pct_30d": 37.1986
+  },
+  "volume": {
+    "available": true,
+    "vol_ma5": 38958373.6,
+    "vol_ma20": 37698666.05,
+    "volume_ratio": 0.7646,
+    "volume_ratio_incl_last": 0.8095,
+    "volume_trend": "持平",
+    "ratio_basis": "末根量 / 剔除末根的5日均量"
+  },
+  "support_resistance": {
+    "resistance": [
+      {
+        "price": 0.1225,
+        "basis": "近60周期最高点",
+        "strength": "强"
+      },
+      {
+        "price": 0.125,
+        "basis": "整数心理关口(0.005)",
+        "strength": "弱"
+      },
+      {
+        "price": 0.13,
+        "basis": "整数心理关口(0.005)",
+        "strength": "弱"
+      }
+    ],
+    "support": [
+      {
+        "price": 0.115,
+        "basis": "整数心理关口(0.005)",
+        "strength": "弱"
+      },
+      {
+        "price": 0.11432,
+        "basis": "MA5 均线位",
+        "strength": "中"
+      },
+      {
+        "price": 0.1108,
+        "basis": "MA10 均线位",
+        "strength": "中"
+      },
+      {
+        "price": 0.11,
+        "basis": "整数心理关口(0.005)",
+        "strength": "弱"
+      }
+    ],
+    "round_step": 0.005
+  },
+  "volume_profile": {
+    "available": true,
+    "lookback_bars": 120,
+    "bins_count": 24,
+    "point_of_control": {
+      "price": 0.08888,
+      "vol": 369941783.05,
+      "pct": 11.5315
+    },
+    "value_area": {
+      "va_high": 0.09846,
+      "va_low": 0.08169,
+      "covers_pct": 71.4353
+    },
+    "hvn": [
+      {
+        "price": 0.08409,
+        "vol": 312617398.92,
+        "pct": 9.7446
+      },
+      {
+        "price": 0.08648,
+        "vol": 345493547.0,
+        "pct": 10.7694
+      },
+      {
+        "price": 0.09127,
+        "vol": 364071752.56,
+        "pct": 11.3485
+      },
+      {
+        "price": 0.09367,
+        "vol": 295388826.81,
+        "pct": 9.2076
+      },
+      {
+        "price": 0.09606,
+        "vol": 246163379.96,
+        "pct": 7.6732
+      }
+    ],
+    "lvn": [
+      {
+        "price": 0.0769,
+        "vol": 44469959.17,
+        "pct": 1.3862
+      },
+      {
+        "price": 0.10565,
+        "vol": 60536228.2,
+        "pct": 1.887
+      },
+      {
+        "price": 0.10804,
+        "vol": 72842502.95,
+        "pct": 2.2706
+      },
+      {
+        "price": 0.11763,
+        "vol": 56647707.05,
+        "pct": 1.7658
+      },
+      {
+        "price": 0.12002,
+        "vol": 31521406.05,
+        "pct": 0.9826
+      },
+      {
+        "price": 0.12242,
+        "vol": 34768412.25,
+        "pct": 1.0838
+      },
+      {
+        "price": 0.12481,
+        "vol": 19044837.0,
+        "pct": 0.5936
+      },
+      {
+        "price": 0.12721,
+        "vol": 19044837.0,
+        "pct": 0.5936
+      },
+      {
+        "price": 0.12961,
+        "vol": 10693900.2,
+        "pct": 0.3333
+      },
+      {
+        "price": 0.132,
+        "vol": 10693900.2,
+        "pct": 0.3333
+      }
+    ],
+    "bins": [
+      {
+        "price": 0.0769,
+        "vol": 44469959.17,
+        "pct": 1.3862,
+        "tag": "LVN"
+      },
+      {
+        "price": 0.07929,
+        "vol": 110220015.67,
+        "pct": 3.4357,
+        "tag": "normal"
+      },
+      {
+        "price": 0.08169,
+        "vol": 206301283.25,
+        "pct": 6.4306,
+        "tag": "normal"
+      },
+      {
+        "price": 0.08409,
+        "vol": 312617398.92,
+        "pct": 9.7446,
+        "tag": "HVN"
+      },
+      {
+        "price": 0.08648,
+        "vol": 345493547.0,
+        "pct": 10.7694,
+        "tag": "HVN"
+      },
+      {
+        "price": 0.08888,
+        "vol": 369941783.05,
+        "pct": 11.5315,
+        "tag": "POC"
+      },
+      {
+        "price": 0.09127,
+        "vol": 364071752.56,
+        "pct": 11.3485,
+        "tag": "HVN"
+      },
+      {
+        "price": 0.09367,
+        "vol": 295388826.81,
+        "pct": 9.2076,
+        "tag": "HVN"
+      },
+      {
+        "price": 0.09606,
+        "vol": 246163379.96,
+        "pct": 7.6732,
+        "tag": "HVN"
+      },
+      {
+        "price": 0.09846,
+        "vol": 151741542.87,
+        "pct": 4.7299,
+        "tag": "normal"
+      },
+      {
+        "price": 0.10086,
+        "vol": 109339526.45,
+        "pct": 3.4082,
+        "tag": "normal"
+      },
+      {
+        "price": 0.10325,
+        "vol": 81020698.3,
+        "pct": 2.5255,
+        "tag": "normal"
+      },
+      {
+        "price": 0.10565,
+        "vol": 60536228.2,
+        "pct": 1.887,
+        "tag": "LVN"
+      },
+      {
+        "price": 0.10804,
+        "vol": 72842502.95,
+        "pct": 2.2706,
+        "tag": "LVN"
+      },
+      {
+        "price": 0.11044,
+        "vol": 82336631.45,
+        "pct": 2.5665,
+        "tag": "normal"
+      },
+      {
+        "price": 0.11284,
+        "vol": 89783525.45,
+        "pct": 2.7986,
+        "tag": "normal"
+      },
+      {
+        "price": 0.11523,
+        "vol": 83423647.2,
+        "pct": 2.6004,
+        "tag": "normal"
+      },
+      {
+        "price": 0.11763,
+        "vol": 56647707.05,
+        "pct": 1.7658,
+        "tag": "LVN"
+      },
+      {
+        "price": 0.12002,
+        "vol": 31521406.05,
+        "pct": 0.9826,
+        "tag": "LVN"
+      },
+      {
+        "price": 0.12242,
+        "vol": 34768412.25,
+        "pct": 1.0838,
+        "tag": "LVN"
+      },
+      {
+        "price": 0.12481,
+        "vol": 19044837.0,
+        "pct": 0.5936,
+        "tag": "LVN"
+      },
+      {
+        "price": 0.12721,
+        "vol": 19044837.0,
+        "pct": 0.5936,
+        "tag": "LVN"
+      },
+      {
+        "price": 0.12961,
+        "vol": 10693900.2,
+        "pct": 0.3333,
+        "tag": "LVN"
+      },
+      {
+        "price": 0.132,
+        "vol": 10693900.2,
+        "pct": 0.3333,
+        "tag": "LVN"
+      }
+    ]
+  },
+  "warnings": [
+    "已剔除 1 根未收盘 bar，指标基于最后一根已收盘 K 线（口径统一）",
+    "极端波动: 2026-03-31 08:00 单根变动 +14.2%; 2026-04-03 08:00 单根变动 +15.8%; 2026-08-21 08:00 单根变动 +10.1% —— 技术指标准确性可能下降，请风控重点关注"
+  ]
+}

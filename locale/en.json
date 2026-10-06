@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "K析研判团 (Kexi Crypto Analyst Team)",
+    "description": "A 5-role crypto trend-analysis expert preset (lead Kexi + market-data/indicator/forecaster/risk subagents): zero-dependency Python analysis chain, report-JSON contract validation, ADV20 liquidity gate, stale-data interception, volume profile (POC/value area), token unlock schedule, correlation & position budgeting, token compaction and a self-contained HTML dashboard. v1.2.0 adds a live progress popup (node timeline), local-CLI cross-validation (agy/codebuddy/mimo), a settings panel persisted to kexi-settings.json, and concurrent screener fetching (3.78x). v1.2.1 fixes the member-delegation channel (D9: maxDepth semantics) and auto-triggers CLI cross-check inside the kexi_run pipeline (step 5/7, result stored in report.crosscheck)."
+  }
+}

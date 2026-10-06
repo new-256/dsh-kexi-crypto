@@ -1,0 +1,13 @@
+# Python 运行产物
+__pycache__/
+*.pyc
+
+# 开发沙盒（verify/smoke 的重建产物，不随包分发）
+.scratch/
+
+# 运行时输出约定目录（用户工作区里由 kexi_* 工具生成）
+kexi_out/
+
+# 打包产物
+*.tgz
+node_modules/

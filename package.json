@@ -1,0 +1,56 @@
+{
+  "name": "dsh-kexi-crypto",
+  "version": "1.9.17",
+  "description": "K析研判团 DSH 插件包：加密货币趋势研判 6 人专家团（主理人 K析 + 数脉/指北/望潮/守拙/证伪），可选接入 CEX 实盘，零第三方依赖 Python 分析脚本链（取数→指标→组装→契约校验→token压缩→自包含 HTML 看板）。v1.5.0：重大能力升级与项目历史实操经验建档交付——①选币质量升级（P1）：新增 position.py（90日区间位置、距高点回撤、20日涨幅分位、放量持续天数拥挤度扣分、窄幅横盘识别）、timeframe.py（周月线重采样与共振/逆大周期反弹判定）、backtest.py（点时间历史中位数+胜率回测校验）；②多面数据源（P2）：新增 datasources.py 覆盖 RSSHub 消息面、DEX 热币、DefiLlama 资金流、合约持仓/费率、恐惧贪婪指数（替代受限的 X/Twitter 情绪源）；③真实 CEX 接入与实盘风控（P3）：新增 cex_keystore.py（Windows DPAPI 本地加密存储不上云、禁提币权限、安全体检）、cex_risk.py（保守档默认、HARD_CEILING 绝对上限不可突破）、cex_adapter.py（Binance/OKX/Gate/MEXC 实盘适配，默认 DRY_RUN，真实下单必须用户确认）；④长期保活与多渠道通知（P4）：新增 keepalive.py（定时/信号触发轻量盯盘）、kexi_notify.py（企业微信/WorkBuddy/QQ/落盘通知，默认仅通知不动仓）；⑤Token 消耗统计（P5）：新增 token_stats.py（单次任务与每日分类统计，AST 级别排除多帧 zstd 与 chunk 冗余虚报）；⑥实操战绩建档交付（P6）：track_report.py 自包含离线 HTML 报告，含完整判断点分析线、三法交叉止盈止损、底仓分批策略，反哺经验入库 track-record/ 与团队编排铁律。全链 25 个 Python 脚本 100% 纳入 SCRIPT_WHITELIST。v1.4.7：修复工作区根解析与 kexi_news schema；v1.4.6：团队兜底建队、latest.json 权威产物标记与新闻通道探测；v1.4.0：原生持久团队。v1.5.1：团队动向卡片修复 + 入场时机引擎 + 币种行为画像 + 定时消息面监控——①团队状态灯卡片修复：host 补处理 team/member、team/message/queued、team/message/delivered、subagent/catalog、assistant/message 五类真实事件（此前全部被忽略，卡片看不到任何团队动向与评估结果），成员动向/派活/回报节点化，主理人最终评估结论直接进卡片新「评估结论」标签页；②入场时机引擎（entry_plan.py）：立即入场/回调至X企稳反弹/抄底分批点位/放量突破Y补仓四类动作+失效位，入场环境四条件量化（放量增长/高换手/量升盘稳/资金流出减少），追高嫌疑拦截（pos_90≥80 或拥挤拉伸时禁止立即入场）；③币种行为画像（coin_profile.py）：拉盘/出货模式归纳（震荡拉盘/快速拉盘震荡出货/缓慢拉盘快速出货/趋势行情）、顺/逆大盘（r+beta）、走大饼还是以太行情、BTC-ETH 比价风格切换；④定时消息面监控（news_watch.py）：RSSHub Telegram 特殊通道（吴说/Cointelegraph/WatcherGuru/WhaleAlert，实测 4/4 可用）+常规通道+降级标记，--loop 30 分钟轮询，话题分类，消息面占研判高比重；暗网边界诚实明示。v1.5.2：线上取证修复 7 项 + 批量执行与产物溯源——①kexi_run 子进程 CWD 改会话工作区（此前在插件安装目录执行，相对 --out 全部 FileNotFoundError，news_watch 静默把产物写进插件包）；②tool/call 的 arguments 是 JSON 字符串，describeTool 此前只认对象导致所有工具标签退化（如「派活给 成员」）；③等待期 busy 判定 60s→180s 并新增 awaitTeam/turnOpen 判定（wait_agent 静默 10 分钟期间卡片不再显示空闲）；④成员忙碌态跨会话可见（成员事件在成员自己的 session 桶，此前主理人名册全显示待命）；⑤产物新鲜度校验+按 latest.json mtime 刷新（修「上一轮看板冒充本次成果」与「成果挂上后永不刷新」）；⑥派活指引写明 target 用成员代号（中文名会报 active teammate not found）；⑦新增 kexi_run 批量模式（{item} 模板+并发+脏数据闸门）与 mode=files 本轮/历史产物溯源——根治成员手写 Python（实测 4 个自写脚本、1 个 SyntaxError 崩掉整轮）。v1.5.3：秒级确定性快研（先快答、再深研）——实测单币团队协作全流程 17 分钟，而同一套分析脚本串起来仅约 1 秒（fetch 505ms + 指标/位置/多周期/入场时机/币种画像 约 400ms），99.9% 时间耗在模型编排往返。新增 fast_analysis.py 与 kexi_run(mode=fast)：一次工具调用即出评级/90日位置/多周期方向/入场动作与价位/失效位/追高嫌疑/币种画像/三情景，多币用 symbols 批量（实测 4 币 2.1 秒）；口径与团队流程完全一致（复用同一批脚本）。policy 与主理人人设同步写入「先快答、再深研」纪律并给出 17 分钟的量化依据，深研时直接复用 fast_analysis.json 不重算。v1.5.4：跟踪「分析一下现在整个大盘的走势」现场取证，修 3 个致命缺陷——①卡片传值 bug：ProgressPopup 收到的是 useState 元组 [值,setter] 而非活动数据，sessions 恒为 undefined，弹窗永远显示「暂无 K析研判活动」；这才是\"卡片不工作\"长期无解的真凶（服务端数据一直正常）。同时把轮询失败从静默吞掉改为可见横幅（区分\"无活动\"与\"接口挂了\"）并补 credentials: include；②批量返回值含 undefined 触发 DSH lossless JSON 校验拒绝，批量明明跑完却报 invalid output；③mode=fast 传 6 币只分析 1 个（重复 --symbol 被 argparse 覆盖）；另修 mode 缺省推断劫持旧式 pipeline:true 调用的回归。v1.5.5：AlphaAgent 方案的可落地部分（5 条全做）+ CEX 凭据面板 + 门户快查 + 链上钱包监控 + 浏览器能力矩阵——①硬风控一票否决：risk.veto 机制化，守拙否决后给出正面评级或 enter_now 会被契约校验直接拒收（此前只是散文，是否被遵守取决于主理人当时怎么写）；②分歧度阈值 0.5：成员分歧数值化，超阈值强制降级为观察/不入场；③信号衰减：coin_profile 用同一判据分别跑全历史与最近 90 根窗口，识别模式是否已切换、近期冲高回落比例；④衍生品情绪确定性化：derivs_sentiment.py（资金费率/30日分位/拥挤度/OI/主动买卖比/FearGreed），Binance 主源不可达时自动降级 OKX 并标注 provider；⑤消融对比：ablation_compare.py 诚实对比快答与团队深研，缺产物时如实说无法比较；另修 4 个降级路径真 bug：ADV 算不出却判成流动性不足（方向相反的错误结论）、缓存判据用错导致丢弃磁盘好数据、降级取数覆盖已有好数据（限流毁掉本地数据集）、取数失败时标的从报告中消失。CEX 凭据：设置面板新增填写位，密钥经 Windows DPAPI 加密（实测往返验证），页面永不回显明文，留空=不改动。v1.5.6：更正与加固——news_watch 新增陈旧条目过滤（实测 WhaleAlert 的 RSSHub 频道自 2020-03-11 停更却抓取不报错，会把 2020 年的转账当成今天的资金面证据；现在 age>7 天的条目一律丢弃并如实报告，实测 dropped=5、WhaleAlert 条目 age_days=2393）；更正 v1.5.1「WhaleAlert 频道可用」的错误结论。同时更正：先前用 PowerShell 探测 Binance/Bybit 得到 200 是假象（UA/TLS 指纹不同），以项目真实 UA 复测为 Binance 451 / Bybit 403——datasources.py 的资金费率与持仓量依赖 Binance fapi，在本机长期处于降级状态。v1.5.7：datasources.py 合约情绪接入 OKX 公共接口兜底——本机实测 Binance fapi 恒返回 451（受限地域）、Bybit 恒返回 403（CloudFront 地区拦截），旧的两级兜底双双失效导致合约情绪长期 available=false。降级链改为 binance-fapi → OKX → Bybit；跨所口径按 oiCcy/oiUsd 归一（OKX 的 oi 是合约张数，与 Binance 的币量差 100 倍，混用会给��不可比的数字），统一另算 open_interest_usd 作为唯一可比口径；新增 provider 字段标明数字来自哪家、降级时如实警告不可横比；补 _f() 安全转数字（None 绝不变成 0.0，避免把\"取不到\"伪装成\"确实是 0\"）；修复降级路径丢失 symbol 字段的旧 bug。实测端到端可用 3/失败 0，合约情绪 2.21 秒取到。v1.5.8：修「点设置→卡片与状态灯一起消失」的崩溃——根因是 v1.5.5 新增的 CEX 凭据 5 个 React hook 被放在 SettingsCard 的两个早退 return 之后，违反 Rules of Hooks：首次渲染 cfg=null 早退(0 hook)、二次渲染调 5 hook → React 抛 Rendered more hooks than during the previous render → 整棵组件树卸载。已把 hook 全部移到早退之前，并新增 scripts/test-hooks-order.mjs 做机械扫描（按括号深度判定顶层早退，避免把嵌套回调里的 return 误判——第一版正是因此全绿、假通过）。另修两处：①数据不可用时仍输出「可执行止损」（基于 22 根 4 天粒度数据算出的价位是精确的垃圾），现在一并作废；②kexi_run(mode=fast) 静默丢弃 source 参数——模型传 source:binance 想强制币安口径，实际仍在自动降级链里跑，结论与预期不符却无人察觉；现在真正下发并支持 --source binance|coingecko，指定源取不到即明确失败、绝不静默换源。preset id: kexi-crypto。 v1.6.0：打通 CEX 实盘链路——①修 v1.5.5 遗留的凭据死链（host 面板写 {ex}.enc.json base64 信封，Python 只认 {ex}.{label}.dpapi 裸二进制，目录格式皆不同且无桥接，导致配好的密钥永远读不到）；②统一凭据存储并恢复 label 多账户维度；③cex_adapter.py 补 CLI（此前是纯库无入口，挂在白名单里却根本调不动）；④新增 kexi_cex 结构化工具取代手写 argv；⑤自主级别（只读/提议+确认/受限自动/全自动）由面板配置、写进 autonomy.json 供 Python 只读，模型无任何途径翻转，异常一律 fail-closed 回只读；⑥订单意图日志 + 幂等序号，应对实测 37% 的模型回合失败率导致的重复下单；⑦交易所注册表可配置、启用式展示、多所持仓聚合。 v1.6.1：修复研判卡片串味——①根因是每次 kexi_run 都自动建队，5 个 team/member 节点（\"数脉 已就位\"…）status=ok 长期留在时间线里，没派活也满屏像团队进度；②建队节点合并为一条摘要（30s 窗口）；③节点加 kexi 相关性标记，用白名单而非黑名单，未知 kind 默认不显示；④/activity 支持 sessionId 只返回当前会话，且只返回有 kexi 活动的会话；⑤\"当前在干什么\"仍读全量节点（研判中途模型思考时卡片不该一片空白）；⑥空态文案澄清\"纯聊天不计入\"。 v1.6.2：卡片新增「🕸 关系图」标签页——手绘 SVG 手写力导向（无外部图库），展示谁加入了工作、各自负责哪一类活（数据搜集/数据分析/风控执行/质疑复核/编排派活/其他工作）。分类从成员正在跑的**脚本**推导而非角色硬编码；catFrom 区分实测与推测（虚线圈），说不准归「其他工作」不猜；忙碌成员呼吸环、活跃边流动虚线；图为空时明确说明而非画空图。 v1.6.3：真浏览器渲染自检并修 5 个只有渲染才暴露的 bug——①SVG 属性写成 kebab-case 被 React 静默丢弃（区分实测/推测的虚线圈因此消失）②圆盘与分类文字 key 重复导致 React 丢节点 ③viewBox 360 被放大 2.4 倍致相邻节点文字横向重叠并溢到图例区 ④成员子会话冒出 5 个空块 ⑤窄窗口缩到 0.57 倍字不可读（加 min-width 横向滚动兜底）。新增 test-graph-render-rules.py 16 项钉死。 v1.6.4：卡片标题栏印当前插件版本——host 插件代码在进程启动时加载、刷新浏览器不生效，会出现\"界面看着是新的、服务端行为是旧的\"这类难自证局面；印上版本号即可一眼分辨是否没重启。 v1.7.0：新增 regime.py 市场状态判定（上行期/下行期/横盘期）——四类判据（趋势强度/市场广度/位置分位/拥挤度）加权，位置判据刻意不给方向只给时机，不可观测判据权重重归一化并按覆盖率下调置信度，置信度硬封顶 0.85（概率标签不该有高置信），失效条件永远非空且必须由实算均线值生成。 v1.8.0：regime 广度接 screener 并发层可联网跑（实测 5.4s/30 样本）；regime 进报告且与单币 trend.direction 分开呈现；新增 regime_log.py 对账台账（口径先定后看、样本不足不给命中率）；设置面板英文全部中文化。 v1.8.1：CEX 凭据表单按交易所渲染（OKX 三样含密码短语，Binance/Gate/MEXC 两样），修正旧文案\"Gate 也需要 passphrase\"的错误，提交前拦一道凭据完整性。 v1.9.0：新增 position_doctor.py 仓位体检——真实持仓×regime 七条规则出调仓意见，自主级别只决定是否附订单草案，模块从不下单；市场状态仅用于放大已有问题、不单独构成减仓理由。 v1.9.1：修复 DPAPI 凭据加密/解密从未真正工作的严重缺陷（脚本从未发送给 PowerShell，JSON 明文被当代码解析），并补上 PS 5.1 的 Add-Type 与控制台代码页处理。 v1.9.2：修复 5 个「改了没反应」的死设置（screenerTop/screenerWorkers/minAdvUsd/riskPerTrade/maxWeight 已注入数脉人设），修正 UI 占位默认值与 host 真实默认差 10 倍的问题；新增前后端字段匹配与设置连通性审计。 v1.9.3：账户标签改为可理解的用途下拉（现货/永续合约/交割合约/杠杆逐仓/只读监控/自定义）；修复 OKX 现货持仓接口口径（positions 无 SPOT instType，改由余额推导，mark 取单价避免 1000 倍误差）。 v1.9.4：修复 kexi_cex 返回 undefined 属性导致框架「value is not lossless JSON」而全线不可用（5 次调用 4 次失败，成功比失败更易炸）；改为按需赋值。 v1.9.5：新增 open-orders 子命令（工具 action 枚举早就写了 open_orders，后端却从未实现），position_doctor 接入在途委托——识别「减仓建议与在途单重复」与「挂价远离市价、永不成交」；修复跟踪器把网络异常当成会话结束。 v1.9.6：regime/regime_log/position_doctor 三脚本补进 kexi_run 白名单（此前模型调不到）；新增⑦组「工具承诺 vs 后端兑现」审计（action 枚举↔CLI 子命令、脚本白名单覆盖、追踪器网络异常处理）。 v1.9.7：新增全脚本冒烟测试（31 个脚本逐一语法/--help/缺参行为/白名单覆盖/离线实跑/stdout 末行 JSON），并修掉它抓出的问题：portfolio.py 的 % 帮助串崩溃、enrich_picks.py 缺参抛堆栈。 v1.9.8：修 host 与 preset 的凭据目录分叉——preset 的 DSH_HOME 指向 backend\\dsh 而 host 指向 dsh-home，导致 kexi_cex 报「未配置任何凭据」（真因是路径分叉，不是用户没配）。改为逐个候选目录找真正含 *.dpapi 的那个；跟踪器端口改为可配置/自动探测（原写死 62604，重启后静默采 0 样本）。 v1.9.9：kexi_cex 摘要自报实际凭据目录与 Python stderr（黑盒猜 DSH_HOME 猜错方向，工具自己报才可靠；此前 Python 失败只剩「失败」两字，丢掉唯一诊断线索）。 v1.9.10：修 kexi_cex 丢弃 runPython 错误通道——失败路径无 stdout 字段，旧代码只读 r.stdout 得到 {}，再被渲染成「未配置任何凭据」（**捏造的原因**，用户会照着去重配密钥，真因是脚本没跑起来）。现直接用 r.error，并明确排除该误判。 v1.9.11：修 kexi_cex 的脚本路径——argv[0] 是裸文件名，Python 按 cwd 解析，而 cwd 是 dsh 包的 lib 目录，导致 can t open file。改为 join(HERE,…) 绝对路径，与 cwd 无关。（这是 v1.9.10 拿到真实报错后定位的根因。） v1.9.12：修模型在真实会话里点名的工具层 bug——open_orders 报参数错误（下划线 vs 连字符子命令），且被错误塞进 positions 的 --market、默认值 usdtm 对现货挂单是错的；另修 cmd_open_orders 逐市场取导致的重复计数（OKX orders-pending 不按市场过滤）。 v1.9.13：label 缺省自动解析——工具 schema 承诺「缺省用设置里的默认标签」但没实现，漏传 label 会报「未找到 okx/None 的密钥」。现按已配置密钥自动判定；多标签时不猜（猜错等于读错账户）。 v1.9.14：（1）fetch_klines 新增 okx 价源——此前只有 binance/coingecko，等于拿币安的价算 OKX 仓位的止损；实测当前价差 -0.026% 影响小，但 OKX 溢价时止损位会算错，而止损是要真金白银执行的。（2）position_doctor 默认自动读取在途委托——不是可选增强而是诊断完整性前提，读不到就报数据缺口。（3）label 解析后回显真实标签，不再显示 okx/null。 v1.9.15：现货成本价——余额接口不提供成本（这是 entry_price 恒为 0 的真因），改由历史订单 avgPx 推导（移动加权平均，含以基币收取的手续费）。因交易所历史订单有时间窗口，回传 complete/caveat 标注覆盖范围，宁可标注不完整也不给看似精确的错数字。体检新增「成本盈亏基准」发现。实测 PYTH 成本 $0.0856、浮亏 -8.2%。 v1.9.16：跟踪「诊断仓位」会话发现两个已修 bug 未被主流程使用——① fast_analysis/kexi_run 的 --source 不含 okx，auto 永远先打币安，而币安 PYTH 日线停更 2.0 天（实测），红队正是拿「1d 停更 2 天盲区」说趋势不可验证；auto 改为币安+OKX 价比对选最新，来源如实标注。② cost_basis 虽可用但模型无法一键调用，新增 kexi_cex cost_basis action；另修 OKX orders-history 默认时间窗太短（PYTH 买于 09-28、10-05 再查返回 0 条，成本价凭空消失），必须显式传 begin/end。 v1.9.17：跟踪「仓位诊断」会话——成本价首次进报告（PYTH @0.08561 浮亏 -8.9%），但发现三个残留：①快研命中币安停更 2.0 天的旧缓存（判据 age<=3 太宽，价比对没机会跑），日线缓存复用门槛收紧到 1.5 天；②kexi_run 错误字段透传非字符串导致框架报 value.error must be a string，统一 String()；③cost_basis 漏传 exchange 时报「未找到 None 的密钥」误导，改为说人话。",
+  "license": "MIT",
+  "icon": "./icon.svg",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "verify": "node scripts/verify.mjs",
+    "check": "node scripts/verify.mjs",
+    "test": "node scripts/test-runtime.mjs",
+    "test:py": "python preset/kexi-crypto/skills/crypto-market-analysis/tests/test_all.py",
+    "prepack": "node scripts/verify.mjs"
+  },
+  "main": "./home-plugin/dsh-kexi-crypto/lib/index.mjs",
+  "exports": {
+    ".": "./home-plugin/dsh-kexi-crypto/lib/index.mjs",
+    "./client": "./home-plugin/dsh-kexi-crypto/lib/client.js",
+    "./kexi-plugin": "./preset/kexi-crypto/kexi-plugin.mjs",
+    "./preset-skills": "./preset/kexi-crypto/skills",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web"
+    },
+    "bundle": {
+      "patch": "./home-plugin/dsh-kexi-crypto/cordis.patch.yml"
+    }
+  },
+  "files": [
+    "home-plugin/",
+    "preset/",
+    "locale/",
+    "docs/",
+    "scripts/",
+    "track-record/",
+    "icon.svg",
+    "README.md",
+    "INSTALL.md",
+    "CHANGELOG.md",
+    "HANDOFF.md"
+  ],
+  "keywords": [
+    "dsh",
+    "cordis",
+    "agent-preset",
+    "crypto",
+    "analysis",
+    "visualization",
+    "deepseek-harness"
+  ]
+}
