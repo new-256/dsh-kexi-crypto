@@ -59,8 +59,10 @@ html,body{margin:0;background:#0f1218;color:var(--dsw-alias-label-primary);font-
     var cap={};
     mod.apply({inject:function(d,cb){cb({get:function(n){return n==='slots'?{register:function(e,c){cap[e.name]=c;return function(){}},inject:function(){}}:undefined},
       slots:{register:function(e,c){cap[e.name]=c;return function(){}},inject:function(){}}})}});
-    // SettingsCard 就是挂在 settings.plugin.item 上的那个
-    var C=cap['settings.plugin.item'];
+    // SettingsCard v1.9.20 起按候选顺序落座 plugins.row.config →
+    // plugins.bundle.config → settings.plugin.item（旧）；桩 register 不抛错，
+    // 第一个候选即成功，所以优先抓新槽位。
+    var C=cap['plugins.row.config']||cap['plugins.bundle.config']||cap['settings.plugin.item'];
     if(!C) throw new Error('未抓到 SettingsCard，实际：'+Object.keys(cap).join(','));
     window.ReactDOM.createRoot(document.getElementById('root')).render(window.React.createElement(C,{}));
     setTimeout(function(){

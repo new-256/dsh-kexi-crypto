@@ -32,6 +32,31 @@ $rootFiles = @('icon.svg', 'README.md', 'INSTALL.md', 'CHANGELOG.md', 'HANDOFF.m
 
 if (-not (Test-Path $repo))      { Write-Host "找不到仓库根: $repo" -ForegroundColor Red; exit 1 }
 
+# DSH 运行时 HMR watcher 会在写入瞬间打开 cordis.patch.yml 等文件，直接
+# Copy-Item -Force 偶发/持续报 "being used by another process"。NTFS 上
+# 被打开的文件仍可重命名，所以统一走「复制到同卷临时文件 → Move-Item 原子
+# 替换」，并对瞬时锁做有限重试。重试用尽仍失败就抛错（绝不静默跳过，
+# 否则哈希校验会与未更新的旧文件对账而误判一致）。
+function Copy-KexiFile {
+  param([string]$Src, [string]$DstFile, [int]$Attempts = 6)
+  $dstDir = Split-Path -Parent $DstFile
+  if (-not (Test-Path $dstDir)) { New-Item -ItemType Directory -Force -Path $dstDir | Out-Null }
+  $tmp = Join-Path $dstDir (".{0}.{1}.tmp" -f (Split-Path -Leaf $DstFile), [guid]::NewGuid().ToString('N').Substring(0,8))
+  $lastErr = $null
+  for ($i = 1; $i -le $Attempts; $i++) {
+    try {
+      Copy-Item $Src $tmp -Force -ErrorAction Stop
+      Move-Item $tmp $DstFile -Force -ErrorAction Stop
+      return
+    } catch {
+      $lastErr = $_
+      if (Test-Path $tmp) { Remove-Item $tmp -Force -ErrorAction SilentlyContinue }
+      if ($i -lt $Attempts) { Start-Sleep -Milliseconds 350 }
+    }
+  }
+  throw "复制失败（$Attempts 次重试）: $Src → $DstFile : $($lastErr.Exception.Message)"
+}
+
 Write-Host "源: $repo"
 Write-Host "目: $dst"
 
@@ -48,12 +73,15 @@ if (-not $CheckOnly) {
     if (-not (Test-Path $s)) { continue }
     $t = Join-Path $dst $d
     New-Item -ItemType Directory -Force -Path $t | Out-Null
-    # 注意：复制**内容**（'*'）而不是目录本身，否则会产生 <dir>\<dir> 嵌套
-    Copy-Item (Join-Path $s '*') -Destination $t -Recurse -Force
+    # 逐文件原子替换（Copy-Item -Recurse 在目标文件被 HMR watcher 占用时整批失败）
+    Get-ChildItem $s -Recurse -File | Where-Object { $_.FullName -notmatch '__pycache__' } | ForEach-Object {
+      $rel = $_.FullName.Substring($s.Length + 1)
+      Copy-KexiFile -Src $_.FullName -DstFile (Join-Path $t $rel)
+    }
   }
   foreach ($f in $rootFiles) {
     $s = Join-Path $repo $f
-    if (Test-Path $s) { Copy-Item $s -Destination (Join-Path $dst $f) -Force }
+    if (Test-Path $s) { Copy-KexiFile -Src $s -DstFile (Join-Path $dst $f) }
   }
   Get-ChildItem $dst -Recurse -Directory -Filter '__pycache__' -ErrorAction SilentlyContinue |
     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue

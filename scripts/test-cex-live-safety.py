@@ -227,6 +227,60 @@ finally:
         os.environ.pop(ks.STORE_DIR_ENV, None)
         os.environ.pop('DSH_HOME', None)
 
+# ══════════════ ⑦ place_order_checked 的 profile 必须接受档位名字符串（v1.9.18 实盘事故）══════════════
+# 事故复盘：cmd_order 传的是档位名（'conservative' 等字符串），place_order_checked
+# 原样透传给 check_order(profile=...)，后者按 dict 用 p["max_order_pct"] →
+# TypeError: string indices must be integers。下单路径从未真正跑通，两笔 $40
+# 卖出"没成交"是崩了而不是被风控拦住。修复：字符串先 get_profile 解析成 dict。
+ad = ca.BaseAdapter('k', 's', dry_run=True)
+_sent = []
+ad.place_order = lambda **kw: (_sent.append(kw), {'ok': True})[1]
+_acct = {'net_usd': 10000.0, 'available_usd': 10000.0}
+
+
+def _order(notional, stop=None):
+    return {'symbol': 'BTCUSDT', 'side': 'buy', 'qty': None, 'price': None,
+            'notional_usd': notional, 'leverage': None, 'stop_loss': stop,
+            'take_profit': None, 'market': 'spot', 'is_open': True,
+            'order_type': 'MARKET'}
+
+
+# 7a) 字符串档位名不得再 TypeError；balanced 档单笔上限 10%，$700（7%）应通过风控，
+#     且因 balanced 要求显式确认 → need_confirm=True（证明 profile 真解析成了 balanced）
+r = ad.place_order_checked(_order(700, stop=650), account=_acct, positions=[],
+                           profile='balanced')
+ck('⑦ profile="balanced" 字符串不崩且风控确实执行',
+   isinstance(r, dict) and r.get('risk') is not None, repr(r)[:160])
+ck('⑦ 字符串档位被正确解析（$700/7% 在 balanced 10% 内放行）',
+   bool(r.get('allowed')) and bool(r.get('risk', {}).get('allowed')),
+   str(r.get('risk', {}).get('reasons'))[:160])
+ck('⑦ balanced 档要求确认 → need_confirm（证明没被静默当成别的档）',
+   r.get('need_confirm') is True, str({k: r.get(k) for k in ('allowed', 'need_confirm')}))
+
+# 7b) 同一笔 $700（7%）用 conservative（上限 5%）字符串 → 必须被拦。
+#     若修复是"字符串一律忽略走默认档"，默认恰好是 conservative，仍会拦；
+#     但配合 7a 放行，就能区分"正确解析每个档位"与"永远走默认档"。
+r2 = ad.place_order_checked(_order(700, stop=650), account=_acct, positions=[],
+                            profile='conservative')
+ck('⑦ profile="conservative" 字符串：7% 超 5% 上限被拦',
+   r2.get('allowed') is False and r2.get('risk', {}).get('allowed') is False,
+   str(r2.get('risk', {}).get('reasons'))[:160])
+
+# 7c) aggressive 字符串（不要求确认、可无止损）小额买单 → 风控通过且走 DRY_RUN 返回，
+#     这条返回路径在修复前永远到不了（前面就 TypeError 了）。
+r3 = ad.place_order_checked(_order(40), account=_acct, positions=[],
+                            profile='aggressive')
+ck('⑦ profile="aggressive" 字符串：风控通过到达 DRY_RUN 出口',
+   r3.get('ok') is True and r3.get('allowed') is True and r3.get('dry_run') is True,
+   repr(r3)[:160])
+ck('⑦ DRY_RUN 下绝不真实发单', _sent == [], 'dry_run 仍调用了 place_order！')
+
+# 7d) dict 形态 profile 仍可用（兼容直接传档位 dict 的调用方）
+prof_d = __import__('cex_risk').get_profile('aggressive')
+r4 = ad.place_order_checked(_order(40), account=_acct, positions=[], profile=prof_d)
+ck('⑦ dict 形态 profile 继续生效', r4.get('ok') is True and r4.get('allowed') is True,
+   repr(r4)[:120])
+
 # ══════════════ 汇总 ══════════════
 fails = [c for c in checks if not c[1]]
 for name, okv, extra in checks:

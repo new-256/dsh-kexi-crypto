@@ -59,6 +59,7 @@ Run-Step 'test-cex-tool-serialization.mjs (工具返回值序列化)' { node (Jo
 Run-Step '成果登记运行期探针' { node (Join-Path $repo 'scripts\_artifact-runtime-probe.mjs') } $PSScript
 Run-Step 'test-runtime-bugs.mjs (现场取证 bug)' { node (Join-Path $repo 'scripts\test-runtime-bugs.mjs') } $PSScript
 Run-Step 'test-hooks-order.mjs (React Hooks 顺序)' { node (Join-Path $repo 'scripts\test-hooks-order.mjs') } $PSScript
+Run-Step 'test-settings-seat.cjs (设置卡多槽位落座)' { node (Join-Path $repo 'scripts\test-settings-seat.cjs') } $PSScript
 Run-Step 'test-veto-disagreement.py (硬风控否决/分歧度)' { & $py (Join-Path $repo 'scripts\test-veto-disagreement.py') } $PSScript
 Run-Step 'test-stop-plan.py (可执行止损)' { & $py (Join-Path $repo 'scripts\test-stop-plan.py') } $PSScript
 Run-Step 'test-futures-fallback.py (合约情绪 OKX 兜底)' { & $py (Join-Path $repo 'scripts\test-futures-fallback.py') } $PSScript
@@ -84,7 +85,7 @@ if (-not $Quick) {
 $pass = @($results | Where-Object { $_.Ok }).Count
 $fail = @($results | Where-Object { -not $_.Ok }).Count
 Write-Host ""
-Write-Host "=" * 62
+Write-Host ("=" * 62)
 if ($fail -eq 0) {
   Write-Host "全部通过：$pass / $($results.Count)" -ForegroundColor Green
   Write-Host "下一步：powershell -ExecutionPolicy Bypass -File scripts\sync-install.ps1 -Pack"

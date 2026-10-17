@@ -83,7 +83,31 @@ ck('② 全部脚本 --help 正常退出（argparse 没坏）', not bad_help, ';
 # ⚠ 还要单独盯「无参运行会不会挂住」：模型漏传参数时如果脚本**不是快速报错退出**
 # 而是去联网/进死循环，它会一直等到超时——那 60 秒就是白白烧掉的回合预算
 # （本项目 37% 回合失败率的背景下，这类浪费很贵）。
+# ⚠ 网络快速失败必须与代码堆栈分开（2026-10-17 实测）：screener.py /
+#   new_listing.py 的参数全有默认值、无 required，无参运行 = 按设计去 Binance
+#   发现标的。断网/SSL 被中断时它们不挂起，而是在重试后快速抛出带 URL 与网络
+#   原因的 RuntimeError（"... failed after N retries: <urlopen error [SSL: ...]>"）
+#   ——这是诚实的网络错误转录，生产路径 kexi_run 会捕获 stderr 如实呈现。
+#   只看 traceback 根异常行是否命中【标准库网络层签名】；TypeError/KeyError/
+#   AttributeError/NameError 等业务代码错误仍然硬失败，绝不用"可能是网络"放水。
+import re as _re  # noqa: E402
+_NET_SIG = _re.compile(
+    r'urlopen error|\[SSL:|Connection(?:Reset|Refused|Aborted)?Error'
+    r'|timed? ?out|Failed to establish a new connection|getaddrinfo failed'
+    r'|Name or service not known|Temporary failure in name resolution'
+    r'|nodename nor servname|RemoteDisconnected|Max retries exceeded'
+    r'|HTTP Error (?:429|5\d\d)', _re.IGNORECASE)
+
+
+def _traceback_root(out):
+    """取 traceback 的根异常行（最后一行非空文本）。"""
+    tail = out[out.rfind('Traceback (most recent call last)'):]
+    lines = [l.strip() for l in tail.splitlines() if l.strip()]
+    return lines[-1] if lines else ''
+
+
 stack_trace = []
+net_fail = []
 hung = []
 for f in targets:
     try:
@@ -97,18 +121,26 @@ for f in targets:
         continue                      # 无必填参数，正常退出
     out = (r.stdout or '') + (r.stderr or '')
     if 'Traceback (most recent call last)' in out:
-        stack_trace.append(f)
+        root = _traceback_root(out)
+        if _NET_SIG.search(root):
+            net_fail.append(f)        # 裸跑联网 + 网络不可达：环境问题，非入口缺陷
+        else:
+            stack_trace.append('%s → %s' % (f, root[:100]))
 ck('③ 缺参数时是干净的 argparse 报错，不是 Python 堆栈',
    not stack_trace, '堆栈崩溃: %s' % stack_trace[:4])
-# ⚠ 无参挂住降级为 **INFO**，不算失败：
-#   backtest / new_listing / news_watch / screener 这四个在 main() 里会先联网，
-#   裸跑就进入长等待。但**流水线从不裸调它们**（都有必填 --input/--symbol），
-#   所以这不是正常使用路径的缺陷，只是「模型万一漏传参数」时要多烧一次超时。
-#   硬判失败会逼着去改四个脚本的联网逻辑——那是超出本轮范围的重构，
-#   而且改错了会把「裸跑会联网」这个既有行为也改掉。**如实记录，不假装。**
+# ⚠ 无参挂起 / 网络快速失败均降级为 **INFO**，不算失败：
+#   backtest / new_listing / news_watch / screener 等在 main() 里会先联网，
+#   裸跑要么进入长等待（挂起），要么快速抛出网络层错误（断网/SSL 中断）。
+#   但**流水线从不裸调它们**（都有必填 --input/--symbol 或 kexi_run 结构化参数），
+#   所以这不是正常使用路径的缺陷，只是「模型万一漏传参数」时多烧一次超时 /
+#   看到一次网络报错。硬判失败会逼着去改这些脚本的联网逻辑——那会把「裸跑会
+#   联网」这个既有行为也改掉。**如实记录，不假装。** 真·代码堆栈仍硬失败（见上）。
 if hung:
     print('  INFO  无参运行会挂起(>25s)的脚本: %s' % ', '.join(hung))
-    print('        流水线从不裸调它们（都有必填参数），但模型漏参时会多烧一次超时。')
+    print('        流水线从不裸调它们，但模型漏参时会多烧一次超时。')
+if net_fail:
+    print('  INFO  无参裸跑联网、当前网络快速失败的脚本: %s' % ', '.join(net_fail))
+    print('        根异常为标准库网络层错误（非代码堆栈）；流水线从不裸调它们。')
 
 # ── ④ 白名单内脚本必须真的可执行（不是只写在名单里）─────────────────────
 plugin = open(os.path.join(HERE, '..', 'preset', 'kexi-crypto', 'kexi-plugin.mjs'),

@@ -18,6 +18,7 @@
 所以本测试盯三件事：死设置、默认值漂移、模块能真的加载并 apply。
 """
 import os
+import io
 import re
 import subprocess
 import sys
@@ -401,6 +402,28 @@ ck('⑧ exchange 缺省时错误说人话（不再报「未找到 None 的密钥
 _pl3 = open(os.path.join(os.path.dirname(__file__) or '.', '..', 'preset', 'kexi-crypto', 'kexi-plugin.mjs'), encoding='utf-8').read()
 ck('⑧ kexi_run 的错误字段统一 String()（否则框架报 value.error must be a string）',
    'error: String(r.error' in _pl3, '')
+
+# ⑧-12 下单路径真 bug（v1.9.18，2026-10-07 实盘会话暴露）
+_ad7 = open(os.path.join(SCRIPTS_DIR, 'cex_adapter.py'), encoding='utf-8').read()
+ck('⑧ place_order_checked 把字符串档位名解析成 dict（否则 check_order 报 string indices must be integers）',
+   'if isinstance(profile, str):' in _ad7 and 'prof = _cr.get_profile(profile)' in _ad7, '')
+ck('⑧ 档位解析对 dict 入参无副作用（仍是 prof = profile or 默认）',
+   'prof = profile or _cr.get_profile()' in _ad7, '')
+ck('⑧ 解析发生在 check_order 调用之前',
+   _ad7.index('isinstance(profile, str)') < _ad7.index('_cr.check_order('), '')
+ck('⑧ 缺陷会阻止下单路径跑通（这是「崩了」不是「拦住了」）',
+   'max_order_pct' in open(os.path.join(SCRIPTS_DIR, 'cex_risk.py'), encoding='utf-8').read(), '')
+
+# ⑧-13 persona-prefix section 只允许注册变量（v1.9.19）
+#      2026-10-15 本轮运行失败：unknown prompt variable "{{cwd}}" in section
+#      "deployment:persona-prefix"; registered variables: provider, model
+#      → 人格前缀里写了未注册的 {{cwd}}，整个预设激活失败。
+_pf = os.path.join(os.path.dirname(__file__) or '.', '..', 'home-plugin', 'dsh-kexi-crypto', 'cordis.patch.yml')
+_pt = io.open(_pf, encoding='utf-8').read()
+_ALLOWED = {'provider', 'model'}
+_used = set(re.findall(r'\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}', _pt))
+ck('⑧ 预设里不出现未注册的提示词变量（本轮因 {{cwd}} 激活失败）',
+   _used <= _ALLOWED, '实际用到: %s' % sorted(_used))
 
 # ── 汇总 ──────────────────────────────────────────────────────────────────
 fails = [c for c in checks if not c[1]]

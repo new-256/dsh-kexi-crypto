@@ -7,7 +7,9 @@
 //      插件在干什么"的痛点。任务跑起来自动弹出（可在设置里关）。
 //   2. CLI 节点：agy/codebuddy/mimo 的工具调用以 🤖 单独成节点，显示"哪个 CLI
 //      在跑、跑了多久、结论是什么"，让本地 CLI 的参与看得见。
-//   3. 设置面板：注册进 settings.plugin.item 槽（与 dsh-pet / dream-skin 同款），
+//   3. 设置面板：v1.9.20 起按优先级落座 plugins.row.config（0.1.7+，
+//      key=dsh-kexi-crypto#kexi-dashboard）→ plugins.bundle.config（0.1.6+，
+//      key=dsh-kexi-crypto）→ settings.plugin.item（≤0.1.5 旧槽，仅兼容），
 //      编辑 host 落盘的 kexi-settings.json（弹窗开关、CLI 优先级、筛选阈值、
 //      仓位预算参数），POST /kexi-dashboard/settings 持久化。
 //
@@ -810,6 +812,12 @@ window.__ModuleLoader__.load({
 
     // ── 设置面板卡（需求 3） ──────────────────────────────────────────────
     const KEXI_SETTINGS_NS = "kexiDashboard";
+    // v1.9.20：设置卡落座槽位候选（详见 seatFirst 注释）。
+    // 包名必须与 package.json name 一致；ROW_ID 必须与 cordis.patch.yml 里
+    // `- id: kexi-dashboard / name: dsh-kexi-crypto` 的行 id 一致——
+    // plugins.row.config 按 "<包名>#<行id>" 精确派发，写错就永远不渲染。
+    const KEXI_PKG_NAME = "dsh-kexi-crypto";
+    const KEXI_ROW_ID = "kexi-dashboard";
 
     function SettingsCard() {
       const st = react.useState(null); const cfg = st[0]; const setCfg = st[1];
@@ -1339,6 +1347,59 @@ window.__ModuleLoader__.load({
       }
     }
 
+    // 多候选槽位落座（v1.9.20）：同一组件按候选顺序尝试，**第一个 register
+    // 成功的槽位生效，绝不重复落座**（两个槽位在新版上同时存在时只出现一张卡）。
+    // 动机（2026-10-17 实测 DSH 0.2.1）：设置卡原来只注册 settings.plugin.item，
+    // 该键控槽位在 DSH 0.1.6 重组插件页时已被移除（≤0.1.5 才有），0.2.x 实时
+    // Slot 树里不存在 → register 抛错、slots.inject 等待一个永不出现的槽位、
+    // 20 次重试后放弃 → 设置卡（CEX 凭据/自主级别/取数口径）在界面永远不可见。
+    // 迁移路径与生态对齐：web-search-panel 用 plugins.row.config（0.1.7+，
+    // key=<包名>#<bundle patch 行 id>）；workbuddy-auth 用 plugins.bundle.config
+    //（0.1.6+，key=包名）。旧槽位保留为末位兼容，新版永不触发、无副作用。
+    function seatFirst(scope, candidates, Component, label) {
+      const slotsSvc = (scope.slots && typeof scope.slots.register === "function")
+        ? scope.slots
+        : (scope.get && scope.get("slots"));
+      if (!slotsSvc || typeof slotsSvc.register !== "function") {
+        console.warn("[kexi] seat " + label + ": slots.register unavailable");
+        return;
+      }
+      let winner = -1;
+      const tryRegister = function (via) {
+        if (winner >= 0) return true;
+        for (let i = 0; i < candidates.length; i++) {
+          try {
+            const d = slotsSvc.register(candidates[i].entry, function (props) {
+              return react.createElement(Component, props);
+            });
+            bookings.push(typeof d === "function" ? d : function () { });
+            winner = i;
+            return true;
+          } catch (e) {
+            // 这个槽位在当前宿主版本不存在——试下一个候选（降级，不抛错拖垮插件树）
+          }
+        }
+        if (winner < 0 && via === "direct") {
+          // 首轮全部失败才 warn，重试轮静默（槽位可能稍后才声明）
+          console.warn("[kexi] seat " + label + ": 全部候选槽位直接注册失败，转入 inject 等待");
+        }
+        return winner >= 0;
+      };
+      // 1) 直接试一轮（插件通常晚于产品模块加载，槽位规范已在）
+      if (tryRegister("direct")) return;
+      // 2) slots.inject 挂到每个候选上：哪个槽位后声明就由谁接住
+      if (typeof slotsSvc.inject === "function") {
+        for (const cand of candidates) {
+          try {
+            slotsSvc.inject(cand.entry.name, function () { tryRegister("inject"); });
+          } catch (e) { /* 该槽位无注入点，忽略，靠定时重试 */ }
+        }
+      }
+      // 3) 定时兜底重试（1.5s / 6s，与 web-search-panel 同节奏）
+      setTimeout(function () { tryRegister("retry-1.5s"); }, 1500);
+      setTimeout(function () { tryRegister("retry-6s"); }, 6000);
+    }
+
     function apply(ctx) {
       if (typeof ctx.inject !== "function") return;
       ctx.inject(["slots"], function (scope) {
@@ -1353,15 +1414,17 @@ window.__ModuleLoader__.load({
           inject: function (injectedSessionId) { return { injectedSessionId: injectedSessionId, sessionsSvc: scope.get("sessions") }; }
         }, Indicator, "header-utilities");
 
-        // 2) 设置面板卡。
+        // 2) 设置面板卡（v1.9.20：多候选槽位落座）。
         //    配置读写走本插件自己的 host 端点 /kexi-dashboard/settings（落盘
         //    kexi-settings.json），因此不依赖已被移除的 settingsScope 服务
         //    （本机 DSH 版本强行注入 settingsScope 会白屏，见 web-search-panel 补丁说明）。
-        seat(scope, {
-          name: "settings.plugin.item",
-          key: KEXI_SETTINGS_NS,
-          inject: function () { return {}; }
-        }, SettingsCard, "settings.plugin.item");
+        //    settings.plugin.item 是 ≤0.1.5 旧槽位（0.1.6 起已移除），放末位仅为
+        //    老宿主兼容；0.2.x 上由前两个候选中的第一个接住。
+        seatFirst(scope, [
+          { entry: { name: "plugins.row.config", key: KEXI_PKG_NAME + "#" + KEXI_ROW_ID }, label: "plugins.row.config" },
+          { entry: { name: "plugins.bundle.config", key: KEXI_PKG_NAME }, label: "plugins.bundle.config" },
+          { entry: { name: "settings.plugin.item", key: KEXI_SETTINGS_NS }, label: "settings.plugin.item(legacy)" }
+        ], SettingsCard, "settings-card");
       });
     }
 

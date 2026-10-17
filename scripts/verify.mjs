@@ -192,7 +192,8 @@ if (yaml) {
 //   需求1 — host 必须订阅 session/event（活动流唯一权威源）并暴露 /activity；
 //   需求2 — kexi-plugin 必须注册 kexi_cli，且**不得**硬引用 CLI 桥包名
 //           （预设里硬引用会让卸载桥的用户整个预设加载失败）；
-//   需求3 — host 暴露 /settings 且能落盘；client 注册 settings.plugin.item。
+//   需求3 — host 暴露 /settings 且能落盘；client 设置卡落座多候选槽位
+//   （v1.9.20：plugins.row.config → plugins.bundle.config → settings.plugin.item）。
 {
   const hostSrc = readFileSync(join(ROOT, 'home-plugin', 'dsh-kexi-crypto', 'lib', 'index.mjs'), 'utf8')
   const clientSrc = readFileSync(join(ROOT, 'home-plugin', 'dsh-kexi-crypto', 'lib', 'client.js'), 'utf8')
@@ -254,7 +255,15 @@ if (yaml) {
 
   // 需求 3：设置面板
   ok(/writeFileSync/.test(hostSrc) && /kexi-settings\.json/.test(hostSrc), 'host 设置未落盘到 kexi-settings.json')
-  ok(clientSrc.includes('settings.plugin.item'), 'client 未注册设置面板卡（settings.plugin.item）')
+  // v1.9.20：设置卡必须落座 0.1.6+ 的新槽位。settings.plugin.item 在 DSH 0.1.6
+  // 重组插件页时已移除（0.2.x 实时 Slot 树实测不存在），只注册旧槽位 = 设置卡
+  // 永不渲染。新槽位 key 有固定格式，写错同样永不渲染，一并断言。
+  ok(clientSrc.includes('plugins.row.config'), 'client 设置卡未迁移到 plugins.row.config（0.1.7+ 槽位）')
+  ok(clientSrc.includes('plugins.bundle.config'), 'client 设置卡缺 plugins.bundle.config（0.1.6+ 兜底槽位）')
+  ok(clientSrc.includes('settings.plugin.item'), 'client 未保留 settings.plugin.item 旧槽位兼容（≤0.1.5 宿主）')
+  ok(clientSrc.includes('"dsh-kexi-crypto#kexi-dashboard"') || clientSrc.includes('KEXI_PKG_NAME + "#" + KEXI_ROW_ID'),
+    'plugins.row.config 的 key 必须是 "<包名>#<bundle patch 行 id>" = dsh-kexi-crypto#kexi-dashboard')
+  ok(/seatFirst/.test(clientSrc), '设置卡多候选落座缺少 seatFirst（须首个成功者生效、禁止重复注册）')
   ok(/clamp\(/.test(hostSrc), 'host 设置缺数值边界收敛（面板脏值会落盘）')
   // v1.2.1：新设置项接线
   ok(/autoCliCrosscheck/.test(hostSrc) && /cliCrosscheckTimeoutSec/.test(hostSrc), 'host 缺 v1.2.1 新设置默认值（autoCliCrosscheck/cliCrosscheckTimeoutSec）')

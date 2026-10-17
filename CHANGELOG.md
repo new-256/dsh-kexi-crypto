@@ -1,5 +1,56 @@
 # 更新日志 · CHANGELOG
 
+## v1.9.20（2026-10-18）— 设置面板在 DSH 0.2.x 永久不可见：落座了一个已被移除的槽位
+
+用户报「插件失效」，全面取证后定位到 **client 设置卡在 0.2.1-alpha.5 上从未渲染过**。
+
+### 根因：槽位随宿主重组消失，落座逻辑静默失败
+
+`client.js` 的设置卡（CEX 凭据、实盘自主级别、取数口径、CLI 开关都在里面）
+只注册一个键控槽位 `settings.plugin.item`。该槽位是 **DSH ≤0.1.5 旧插件设置页**
+的规范；**0.1.6 重组插件页时被移除**，取而代之的是：
+
+| 槽位 | 版本 | key |
+|---|---|---|
+| `plugins.row.config` | 0.1.7+ | `<包名>#<bundle patch 行 id>` = `dsh-kexi-crypto#kexi-dashboard` |
+| `plugins.bundle.config` | 0.1.6+ | 包名 = `dsh-kexi-crypto` |
+| `settings.plugin.item` | ≤0.1.5（已移除） | 设置命名空间 |
+
+实测当前宿主 0.2.1-alpha.5 的实时 Slot 树（cordis inspect）：
+`conversation.session.header.utilities`（状态灯用的槽位）**存在**，
+`settings.plugin.item` **不存在**。于是落座流程三步全灭：
+
+1. `register` 直接抛错（槽位未声明）；
+2. 回退 `slots.inject("settings.plugin.item", …)`——挂到一个**永不声明**的槽位，回调永不触发；
+3. 定时重试 20 次 ×500ms 后放弃。
+
+全程 `console.warn` 静默降级，不拖垮插件树——**灯和弹窗正常，唯独设置卡没有任何入口**。
+生态里两个参照插件早已处理同一断点：web-search-panel 走多候选落座，
+workbuddy-auth 注释里明确记录了 0.1.5→0.1.6 的槽位替换。
+
+### 修复
+
+- 新增 `seatFirst(candidates)`：按候选顺序尝试，**第一个 register 成功者生效，
+  绝不重复落座**；首轮全败再挂 `slots.inject`，最后 1.5s/6s 定时兜底（对齐
+  web-search-panel 节奏）。
+- 设置卡候选：`plugins.row.config`（行详情页）→ `plugins.bundle.config`
+ （bundle 页）→ `settings.plugin.item`（旧宿主兼容，新版永不触发、无副作用）。
+- 新增常量 `KEXI_PKG_NAME`/`KEXI_ROW_ID` 并交叉标注：ROW_ID 必须与
+  `cordis.patch.yml` 的 `- id: kexi-dashboard` 一致，key 写错同样永不渲染。
+- `verify.mjs` 加 4 条防回归断言：两个新槽位必须出现、旧槽位必须保留兼容、
+  row.config 的 key 格式必须正确、多候选必须走 seatFirst（单槽位写法回不来）。
+- i18n 浏览器自检夹具改抓新槽位（优先 `plugins.row.config`）。
+
+### 评估结论（为何 v1.9.19 修了仍有人觉得"插件坏了"）
+
+- **host 半完全正常**：`/kexi-dashboard/status|activity|settings|cex` 实测均 200，
+  版本 1.9.19，OKX 凭据掩码、自主级别 `limited` 均在。
+- **preset 半正常**：v1.9.19 的 `{{cwd}}` 未注册变量已移除（当前只留已注册的
+  `{{model}}`），7 个 kexi_* 工具 + policy section 以桩 ctx 实测全部注册成功；
+  全量回归 verify 12 组、runtime 160 项、Python 套件与 11 个脚本 smoke 全绿。
+- **唯一真实缺陷**就是本次的设置卡槽位：它不报错、不崩溃、不留服务端痕迹，
+  只在浏览器侧静默消失——静态测试与 host 探测都无法发现，必须对实时 Slot 树取证。
+
 ## v1.9.6（2026-09-30）— 工具承诺 vs 后端兑现：同类问题成组查出
 
 用户要求：「继续查，另外评估一下还有没有其他问题」。

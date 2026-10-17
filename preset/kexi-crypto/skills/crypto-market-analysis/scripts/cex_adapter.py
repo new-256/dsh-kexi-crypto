@@ -290,7 +290,18 @@ class BaseAdapter:
             dict(ok, allowed, risk, order_result|None, dry_run)
         """
         import cex_risk as _cr
-        prof = profile or _cr.get_profile()
+        # ⚠ v1.9.18 真 bug（2026-10-07 实盘会话暴露，两笔下单都因此崩溃）：
+        #   参数名 profile 有**两种合法语义**——档位名（'conservative' 字符串）
+        #   或档位 dict。cmd_order 传的一定是字符串（args.profile/设置里的档位名），
+        #   而这里原样透传给了 check_order(profile=...)，后者按 dict 用
+        #   `p["max_order_pct"]` → **TypeError: string indices must be integers**。
+        #   后果：下单路径**从未真正跑通过**——这次没成交是"崩了"而不是"拦住了"，
+        #   属侥幸而非保护。这两笔单是 $40 的卖出，大了就是真损失。
+        #   修法：字符串一律解析成 dict；已是 dict 则原样用。
+        if isinstance(profile, str):
+            prof = _cr.get_profile(profile)
+        else:
+            prof = profile or _cr.get_profile()
         if account is None:
             try:
                 bals = self.get_balances()
