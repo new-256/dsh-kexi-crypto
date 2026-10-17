@@ -1,8 +1,22 @@
 # 交接文档 · HANDOFF
 
 > 面向**接手这个项目的新会话/新人**。先读完 §1–§4 再动手。
-> 最后更新：2026-09-30，版本 **v1.9.6**
+> 最后更新：2026-10-18，版本 **v1.9.21**
 > 版本演进见 `CHANGELOG.md`；面向使用者的说明见 `README.md` / `INSTALL.md`。
+>
+> **v1.9.19–v1.9.21 三连修（DSH 0.2.1-alpha.5 适配，必读）**：
+> ① v1.9.19 persona 模板 `{{cwd}}` 变量已注册删除 → 只留 `{{model}}`；
+> ② v1.9.20 设置卡槽位 `settings.plugin.item` 在 0.1.6 被移除 → 多候选落座
+>   （`plugins.row.config` key=`dsh-kexi-crypto#kexi-dashboard` 优先）；
+> ③ v1.9.21 预设加载失败真因（headless 引导 agentPresets 注册表取证）：
+>   dsh-tool-subagent 0.2.1 起 persona/toolFilter/backgroundMode 被 apply()
+>   显式 throw，五个角色委派行带 persona → 整组预设 broken。已拆为五个
+>   **内联成员预设** `kexi-member-*`（在主预设之前声明；persona 正文在
+>   `member-personas/*.md` 经包名锚定 `!!js` 读入），委派行改 `agentPreset`
+>   引用。**注意**：cordis:include 的 path 锚在 profile 根且不支持 !!js，
+>   外部 yml 方案两条路都断，别再试；改 subagent 行前先跑
+>   `node scripts/test-preset-contract.mjs`（对真实安装包 schema 校验），
+>   发版前跑 `node scripts/check-preset-mount.mjs`（真实引导挂载验收）。
 
 ---
 
