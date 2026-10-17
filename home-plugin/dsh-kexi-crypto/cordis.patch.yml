@@ -34,12 +34,23 @@
 #     与 ralph 循环是纯 token 负担；
 #   - 无 fork provider：spawn 子代不继承父对话（省上下文），角色成员本就按需
 #     拿自包含任务书；
-#   - delegation 组内为每个角色 toolName 配独立 persona + 最小工具面
-#     （toolFilter.deny 剪掉写文件/交付/提问类工具）+ maxDepth 1（D9 修复：
-#     maxDepth 是"绝对深度上限"而非"子代可再派层数"——主理人 depth 0 派成员
-#     时 childDepth=1，配 0 会连第一次委派都被拒，实测报
-#     "subagent depth 1 exceeds maxDepth 0"；配 1 才是"成员可被派、但成员
-#     自己不能再派"）；
+#   - v1.9.21 适配 DSH 0.2.1：dsh-tool-subagent 0.2.1-alpha.5 起移除
+#     persona/toolFilter/backgroundMode 三个配置字段，apply 见到 persona 或
+#     toolFilter 直接 throw，一行失败拖垮整组预设挂载（本预设在 0.2.1 上
+#     "加载失败"的已证实根因，headless 引导注册表诊断原文：
+#     "tool-subagent: persona is no longer supported; configure persona and
+#     tool plugins in an Agent Preset and select it with agentPreset
+#     (spawn only)"）。五个角色的人格与工具面拆成本文件先注册的五个
+#     【成员预设】kexi-member-*（见下方第二个 insert；必须排在主预设之前：
+#     主预设委派行 apply 时经 presets.readDocument 校验引用存在），
+#     delegation 组每个角色行只留 provider/toolName/maxDepth/agentPreset；
+#     旧 toolFilter.deny 语义改由成员预设工具行表达（不装
+#     present/ask-user/goal/任何 subagent 行，tool-fs 配
+#     write:false/edit:false），比黑名单更严（成员根本看不到这些工具）；
+#     maxDepth 1 保留（D9 修复：maxDepth 是"绝对深度上限"而非"子代可再派
+#     层数"——主理人 depth 0 派成员 childDepth=1，配 0 连第一次委派都被拒，
+#     实测报 "subagent depth 1 exceeds maxDepth 0"），与成员预设无委派工具
+#     形成双保险；
 #   - tool-present：主理人以文件卡片交付看板；
 #   - 预设自带技能库（crypto-market-analysis / kexi-team-orchestration /
 #     token-budget-discipline）经 skill-filesystem customSkillDirs 挂载。
@@ -49,6 +60,314 @@
 # 需要 realm 的只有 planning（planMode）与 compaction（compaction+
 # toolResultPruner），照抄 agy 的组结构即可。
 - insert:
+    # 五个成员预设（人格 + 只读工具面 + kexi 脚本链）必须在主预设之前注册：
+    # 0.2.1 起 dsh-tool-subagent 不再接受 persona/toolFilter，角色人格只能以
+    # 独立 Agent Preset 存在并由委派行经 agentPreset 选择。include 文件是裸
+    # entry list（无 - insert: 外层）。
+    # ⚠ path 必须用 !!js 解析成【包内绝对路径】：cordis-plugin-include 按
+    #   new URL(config.path, ctx.baseUrl) 解析，而 bundle 行的 ctx.baseUrl 是
+    #   profile 根（dsh-home/profiles/web/），不是补丁所在目录——写相对路径
+    #   './kexi-member-presets.yml' 会被解析成 profile 根下的同名文件，报
+    #   "config file not found" 且五个成员预设静默丢失（headless 实测）。
+    #   与 skill-filesystem customSkillDirs 同款包名锚定，兼容两种 baseUrl；
+    #   不做 try/catch 兜底——解析失败应原样抛出（fail-loud），不得静默丢预设。
+    # ── 五个成员预设（v1.9.21 适配 DSH 0.2.1）────────────────────────────
+    # 0.2.1 的 dsh-tool-subagent 移除 persona/toolFilter/backgroundMode 配置
+    # 字段，角色人格必须以独立 Agent Preset 存在并由委派行 agentPreset 引用
+    # （apply 时 readDocument 校验引用存在，故这些行必须在 preset-kexi-crypto
+    # 之前声明）。
+    # ⚠ 曾尝试 cordis:include 外部文件：其 path 按 new URL(path, ctx.baseUrl)
+    #   解析且不支持 !!js，bundle 行 baseUrl=profile 根 → 相对路径必炸
+    #   "config file not found" / 'extension "" not supported'（均 headless
+    #   实测）。故改为内联声明；persona 正文放包内 member-personas/*.md，
+    #   经值位置 !!js（包名锚定，同 customSkillDirs 模式）读入，跨机器可移植，
+    #   文件缺失时 fail-loud。
+
+    - id: preset-kexi-member-market-data
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: kexi-member-market-data
+        name: 'K析成员·数脉（内部预设·勿直接选择）'
+        description: >-
+          K析研判团「数脉」行情数据专员的成员预设，仅供 kexi-crypto 主预设经委派
+          工具的 agentPreset 选择，不是独立会话入口；直接选择它只会得到一个
+          没有编排能力的单人成员。
+        order: 501
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: !!js >-
+                process.getBuiltinModule('node:fs').readFileSync(
+                  process.getBuiltinModule('node:path').join(
+                    process.getBuiltinModule('node:path').dirname(
+                      process.getBuiltinModule('node:module').createRequire(
+                        process.getBuiltinModule('node:url').fileURLToPath(baseUrl) + 'index.js'
+                      ).resolve('dsh-kexi-crypto/package.json')
+                    ),
+                    'home-plugin', 'dsh-kexi-crypto', 'member-personas', 'market-data.md'
+                  ),
+                  'utf8'
+                ).trim()
+              includeRuntimeContext: true
+
+          # 平台门控 shell（与主预设同款二选一）；成员纪律要求分析脚本一律
+          # 走 kexi_run，shell 仅限产物查看与环境排查。
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+
+          # 只读文件面（旧 toolFilter.deny:[write,edit] 在 0.2.1 的新表达：
+          # 写/改工具直接不存在，比黑名单更严格；read_image 保留以便核对图表）。
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              read: true
+              readImage: true
+              write: false
+              edit: false
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: tool-jobs
+            name: '@deepseek-ai/dsh-tool-jobs'
+
+          # kexi 脚本链工具（成员唯一分析手段）；挂载同时注入 kexi:policy 纪律段。
+          - id: kexi-plugin
+            name: 'dsh-kexi-crypto/kexi-plugin'
+
+    - id: preset-kexi-member-technical
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: kexi-member-technical
+        name: 'K析成员·指北（内部预设·勿直接选择）'
+        description: >-
+          K析研判团「指北」技术指标与形态分析师的成员预设，仅供 kexi-crypto 主预设经委派
+          工具的 agentPreset 选择，不是独立会话入口；直接选择它只会得到一个
+          没有编排能力的单人成员。
+        order: 502
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: !!js >-
+                process.getBuiltinModule('node:fs').readFileSync(
+                  process.getBuiltinModule('node:path').join(
+                    process.getBuiltinModule('node:path').dirname(
+                      process.getBuiltinModule('node:module').createRequire(
+                        process.getBuiltinModule('node:url').fileURLToPath(baseUrl) + 'index.js'
+                      ).resolve('dsh-kexi-crypto/package.json')
+                    ),
+                    'home-plugin', 'dsh-kexi-crypto', 'member-personas', 'technical.md'
+                  ),
+                  'utf8'
+                ).trim()
+              includeRuntimeContext: true
+
+          # 平台门控 shell（与主预设同款二选一）；成员纪律要求分析脚本一律
+          # 走 kexi_run，shell 仅限产物查看与环境排查。
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+
+          # 只读文件面（旧 toolFilter.deny:[write,edit] 在 0.2.1 的新表达：
+          # 写/改工具直接不存在，比黑名单更严格；read_image 保留以便核对图表）。
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              read: true
+              readImage: true
+              write: false
+              edit: false
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: tool-jobs
+            name: '@deepseek-ai/dsh-tool-jobs'
+
+          # kexi 脚本链工具（成员唯一分析手段）；挂载同时注入 kexi:policy 纪律段。
+          - id: kexi-plugin
+            name: 'dsh-kexi-crypto/kexi-plugin'
+
+    - id: preset-kexi-member-forecaster
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: kexi-member-forecaster
+        name: 'K析成员·望潮（内部预设·勿直接选择）'
+        description: >-
+          K析研判团「望潮」趋势推演师的成员预设，仅供 kexi-crypto 主预设经委派
+          工具的 agentPreset 选择，不是独立会话入口；直接选择它只会得到一个
+          没有编排能力的单人成员。
+        order: 503
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: !!js >-
+                process.getBuiltinModule('node:fs').readFileSync(
+                  process.getBuiltinModule('node:path').join(
+                    process.getBuiltinModule('node:path').dirname(
+                      process.getBuiltinModule('node:module').createRequire(
+                        process.getBuiltinModule('node:url').fileURLToPath(baseUrl) + 'index.js'
+                      ).resolve('dsh-kexi-crypto/package.json')
+                    ),
+                    'home-plugin', 'dsh-kexi-crypto', 'member-personas', 'forecaster.md'
+                  ),
+                  'utf8'
+                ).trim()
+              includeRuntimeContext: true
+
+          # 平台门控 shell（与主预设同款二选一）；成员纪律要求分析脚本一律
+          # 走 kexi_run，shell 仅限产物查看与环境排查。
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+
+          # 只读文件面（旧 toolFilter.deny:[write,edit] 在 0.2.1 的新表达：
+          # 写/改工具直接不存在，比黑名单更严格；read_image 保留以便核对图表）。
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              read: true
+              readImage: true
+              write: false
+              edit: false
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: tool-jobs
+            name: '@deepseek-ai/dsh-tool-jobs'
+
+          # kexi 脚本链工具（成员唯一分析手段）；挂载同时注入 kexi:policy 纪律段。
+          - id: kexi-plugin
+            name: 'dsh-kexi-crypto/kexi-plugin'
+
+    - id: preset-kexi-member-risk
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: kexi-member-risk
+        name: 'K析成员·守拙（内部预设·勿直接选择）'
+        description: >-
+          K析研判团「守拙」风控官的成员预设，仅供 kexi-crypto 主预设经委派
+          工具的 agentPreset 选择，不是独立会话入口；直接选择它只会得到一个
+          没有编排能力的单人成员。
+        order: 504
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: !!js >-
+                process.getBuiltinModule('node:fs').readFileSync(
+                  process.getBuiltinModule('node:path').join(
+                    process.getBuiltinModule('node:path').dirname(
+                      process.getBuiltinModule('node:module').createRequire(
+                        process.getBuiltinModule('node:url').fileURLToPath(baseUrl) + 'index.js'
+                      ).resolve('dsh-kexi-crypto/package.json')
+                    ),
+                    'home-plugin', 'dsh-kexi-crypto', 'member-personas', 'risk.md'
+                  ),
+                  'utf8'
+                ).trim()
+              includeRuntimeContext: true
+
+          # 平台门控 shell（与主预设同款二选一）；成员纪律要求分析脚本一律
+          # 走 kexi_run，shell 仅限产物查看与环境排查。
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+
+          # 只读文件面（旧 toolFilter.deny:[write,edit] 在 0.2.1 的新表达：
+          # 写/改工具直接不存在，比黑名单更严格；read_image 保留以便核对图表）。
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              read: true
+              readImage: true
+              write: false
+              edit: false
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: tool-jobs
+            name: '@deepseek-ai/dsh-tool-jobs'
+
+          # kexi 脚本链工具（成员唯一分析手段）；挂载同时注入 kexi:policy 纪律段。
+          - id: kexi-plugin
+            name: 'dsh-kexi-crypto/kexi-plugin'
+
+    - id: preset-kexi-member-falsifier
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: kexi-member-falsifier
+        name: 'K析成员·证伪（内部预设·勿直接选择）'
+        description: >-
+          K析研判团「证伪」唱反调官的成员预设，仅供 kexi-crypto 主预设经委派
+          工具的 agentPreset 选择，不是独立会话入口；直接选择它只会得到一个
+          没有编排能力的单人成员。
+        order: 505
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: !!js >-
+                process.getBuiltinModule('node:fs').readFileSync(
+                  process.getBuiltinModule('node:path').join(
+                    process.getBuiltinModule('node:path').dirname(
+                      process.getBuiltinModule('node:module').createRequire(
+                        process.getBuiltinModule('node:url').fileURLToPath(baseUrl) + 'index.js'
+                      ).resolve('dsh-kexi-crypto/package.json')
+                    ),
+                    'home-plugin', 'dsh-kexi-crypto', 'member-personas', 'falsifier.md'
+                  ),
+                  'utf8'
+                ).trim()
+              includeRuntimeContext: true
+
+          # 平台门控 shell（与主预设同款二选一）；成员纪律要求分析脚本一律
+          # 走 kexi_run，shell 仅限产物查看与环境排查。
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+
+          # 只读文件面（旧 toolFilter.deny:[write,edit] 在 0.2.1 的新表达：
+          # 写/改工具直接不存在，比黑名单更严格；read_image 保留以便核对图表）。
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              read: true
+              readImage: true
+              write: false
+              edit: false
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: tool-jobs
+            name: '@deepseek-ai/dsh-tool-jobs'
+
+          # kexi 脚本链工具（成员唯一分析手段）；挂载同时注入 kexi:policy 纪律段。
+          - id: kexi-plugin
+            name: 'dsh-kexi-crypto/kexi-plugin'
+
     - id: preset-kexi-crypto
       name: '@deepseek-ai/dsh-agent-preset'
       config:
@@ -235,13 +554,14 @@
                   headChars: 3072
                   tailChars: 1024
 
-          # ── delegation（角色团）──────────────────────────────────────────────
+          # ── delegation（角色团，v1.9.21 适配 DSH 0.2.1）───────────────────
           # subagents 注册表与 spawn 后端在 HOST 组合（进程单例）；本组只贡献
-          # 委派工具行。四个角色 = 四行 dsh-tool-subagent，各自 toolName 即成员
-          # 名，persona 即角色纪律，maxDepth: 1 = 成员可被主理人派出（depth 1）、
-          # 但成员自己再派会被拦（childDepth=2>1）——注意 0 是错的（D9 实测
-          # "subagent depth 1 exceeds maxDepth 0"，四位成员全部不可用），
-          # toolFilter.deny 剪掉成员不该碰的工具（写文件/交付/提问/目标）。
+          # 委派工具行。0.2.1 的 dsh-tool-subagent 移除了 persona/toolFilter/
+          # backgroundMode 配置字段——角色人格与裁剪后的工具面已拆到本补丁
+          # 上方 include 进来的五个成员预设 kexi-member-*，这里每行仅以
+          # agentPreset 引用。maxDepth: 1 = 主理人 depth 0 可派出成员
+          # （childDepth=1），成员自身不能再派（成员预设内也无任何委派行，
+          # 双保险；D9 实测配 0 会在首次委派时报 depth 1 exceeds maxDepth 0）。
           - id: delegation
             name: cordis:group
             group: true
@@ -254,129 +574,59 @@
               - id: tool-subagent-list-agents
                 name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
 
-              # 通用委派（主理人自查/复核用；角色之外的杂活）
+              # 通用委派（主理人自查/复核用；不带 agentPreset → 子代理继承
+              # 主理人当前预设 kexi-crypto 的工具面与人格）。
               - id: tool-subagent
                 name: '@deepseek-ai/dsh-tool-subagent'
                 config:
                   provider: spawn
                   toolName: subagent
-                  backgroundMode: continuable
 
+              # 数脉（行情取数与数据质检，唯一数据入口）：人格与工具面在成员预设 kexi-member-market-data（0.2.1 新架构）
               - id: member-market-data
                 name: '@deepseek-ai/dsh-tool-subagent'
                 config:
                   provider: spawn
                   toolName: market_data_specialist
-                  backgroundMode: continuable
                   maxDepth: 1
-                  toolFilter:
-                    deny: [write, edit, present, ask_user_question, create_goal, update_goal]
-                  persona: >-
-                    你是「数脉」，K析研判团行情数据专员，唯一数据入口。职责：用
-                    kexi_run(mode=script) 跑 fetch_klines/screener/new_listing/exchanges/listing_effect/datasources/news_watch
-                    脚本取真实行情与多面数据源（消息面RSSHub镜像+Telegram特殊通道：吴说/Cointelegraph/WatcherGuru世界局势/WhaleAlert鲸鱼、DEX热币、DefiLlama资金流、合约持仓费率、恐惧贪婪指数），做数据质检。
-                    消息面/世界局势/大额资金信息在研判中占高比重：news_watch.json 已落盘时直接读取，未落盘时优先跑 news_watch.py。
-                    汇报必含干净度字段：interval_actual（实际粒度）、dropped_open_bar（剔除的未收盘根数）、
-                    duplicates_removed、gaps（缺口列表）、last_bar_age_days（>3 天日线/10 天周线 = 停更，必须显式警告并建议弃用该标的）。
-                    外部限制说明：2026 年 X/Twitter 无可用免费读源，以 Telegram 特殊通道+F&G/CMC 热搜代理替代并如实说明；暗网数据源需付费/Tor 超出能力边界，暗网事件经正规快讯覆盖并明示此边界。
-                    失败处理顺序：重试 → 换源（--source auto/binance/coingecko）→ 如实报告缺口；绝不编造或插值补数。
-                    只报事实与数据表（对话内明细最多最近 10 根，全量落盘 kexi_out/），不做趋势判断、不给买卖建议。输出 ≤600 字 + 落盘文件路径清单。
+                  agentPreset: kexi-member-market-data
 
+              # 指北（指标计算/形态量价/位置与多周期研判）：人格与工具面在成员预设 kexi-member-technical（0.2.1 新架构）
               - id: member-technical
                 name: '@deepseek-ai/dsh-tool-subagent'
                 config:
                   provider: spawn
                   toolName: technical_indicators
-                  backgroundMode: continuable
                   maxDepth: 1
-                  toolFilter:
-                    deny: [write, edit, present, ask_user_question, create_goal, update_goal]
-                  persona: >-
-                    你是「指北」，K析研判团技术指标与形态分析师。基于数脉落盘的 K 线用
-                    kexi_run(mode=script) 调用 indicators.py / position.py / timeframe.py / backtest.py / entry_plan.py / coin_profile.py 或直接读指标 JSON，解读：
-                    MA/EMA 排列、MACD（金叉死叉给出具体日期）、RSI 水平与背离候选、量价结构、
-                    自适应步长过滤（<0.5% 噪声合并）的支撑/阻力、ATR14 波动画像与最大回撤；
-                    深入分析 90 日位置、回撤幅度、20 日涨幅分位、放量持续天数（高位拥挤严扣分）、窄幅横盘识别；
-                    执行周线/月线大周期重采样，判定全周期共振或逆大周期反弹（逆大周期反弹不给正面评级）。
-                    入场时机必给（entry_plan.py）：立即入场/回调至X企稳反弹/抄底分批/放量突破Y补仓四类动作+失效位，追高嫌疑 flagged=true 时禁止给立即入场。
-                    币种行为画像必给（coin_profile.py，配 BTC/ETH 参照）：习惯震荡拉盘还是快速拉盘震荡出货/缓慢拉盘快速出货/趋势行情；顺大盘还是背离大盘；走大饼还是以太行情；BTC-ETH 比价风格。
-                    所有数字必须来自脚本输出，禁止手算或修改。区分"已发生形态"与"待确认信号"，每个关键位给依据。输出 ≤700 字，关键位用列表。
+                  agentPreset: kexi-member-technical
 
+              # 望潮（7 日三情景概率推演与可证伪区间）：人格与工具面在成员预设 kexi-member-forecaster（0.2.1 新架构）
               - id: member-forecaster
                 name: '@deepseek-ai/dsh-tool-subagent'
                 config:
                   provider: spawn
                   toolName: trend_forecaster
-                  backgroundMode: continuable
                   maxDepth: 1
-                  toolFilter:
-                    deny: [write, edit, present, ask_user_question, create_goal, update_goal]
-                  persona: >-
-                    你是「望潮」，K析研判团趋势推演师。基于指北的指标、多周期与行为画像结论给 7 日三情景：
-                    基准/乐观/悲观，每条必含概率（三者之和≈100%）、价格区间 [range_low, range_high]（严格给出价格区间保证事前可证伪）、
-                    触发条件；再给 30 日维度验证位与证伪条件。趋势判定区分状态（多头/空头/震荡）与阶段（初起/中继/末端）。
-                    结合币种行为画像定性推演：快速拉盘震荡出货币反弹目标给低、趋势币回调目标给深、顺大盘币先看 BTC 环境再定情景权重、走以太币叠加 ETH/BTC 比价方向。
-                    消息面占高比重：情景概率须引用消息面证据（news_watch.json 的世界局势/大额资金话题）修正权重。
-                    吸收实操战绩经验：采用三法交叉验证（ATR/结构位/均线）定止盈止损，给出分批底仓策略；大周期逆向时压降乐观概率；
-                    置信度按数据质量与信号一致性定级，指标矛盾时必须降级为"低"。一句话结论 ≤50 字。禁用"一定/必然/百分百"，全部概率化表达。
-                    外部新闻面（可选）：需要时先用 kexi_news 探测一次；返回 news_available=false 则显式标注「新闻面缺失」并跳过，禁止反复尝试。
-                    输出 ≤600 字；如需覆写报告 trend 块，附一个仅含要覆写字段的紧凑 JSON 片段。
+                  agentPreset: kexi-member-forecaster
 
+              # 守拙（风险定级/实盘闸门/保活监控/战绩复盘）：人格与工具面在成员预设 kexi-member-risk（0.2.1 新架构）
               - id: member-risk
                 name: '@deepseek-ai/dsh-tool-subagent'
                 config:
                   provider: spawn
                   toolName: risk_assessor
-                  backgroundMode: continuable
                   maxDepth: 1
-                  toolFilter:
-                    deny: [write, edit, present, ask_user_question, create_goal, update_goal]
-                  persona: >-
-                    你是「守拙」，K析研判团风控官。风险定级只用四档：低/中/高/极高，宁高勿低。
-                    锚点：ATR%、30 日最大回撤、流动性（ADV20 <$3M 一票否决）、数据停更/缺口、高位拥挤度扣分与硬否决建议、极端事件、
-                    消息面与世界局势风险（news_watch.json 的世界局势/大额资金话题条数骤变 = 事件风险溢价；稳定币 7 日净销毁 = 资金离场）。
-                    风控结论反向影响名单：高位放量多日与极高危标的坚决回避或剔除，宁缺毋滥。
-                    入场时机风控（entry_plan.json）：追高嫌疑 flagged=true 的标的不得给立即入场；抄底档在月线空头时仓位建议减半；突破补仓必须验证突破日量比≥1.2 且次日不回吞。
-                    负责实盘 CEX 密钥库体检与风控闸门（cex_keystore/cex_risk/cex_adapter：保守档默认、HARD_CEILING 绝不突破、严禁提币、必须用户确认）；
-                    负责保活监控与通知（keepalive/kexi_notify/news_watch --loop：默认仅通知不动仓）；
-                    负责 Token 消耗统计审计（token_stats）与战绩归档复盘（track_report）。
-                    输出 ≤500 字，结构=等级+依据+提示清单；如需覆写报告 risk 块，附一个仅含要覆写字段的紧凑 JSON 片段。
+                  agentPreset: kexi-member-risk
 
+              # 证伪（攻击结论前提的唱反调官）：人格与工具面在成员预设 kexi-member-falsifier（0.2.1 新架构）
               - id: member-falsifier
                 name: '@deepseek-ai/dsh-tool-subagent'
                 config:
                   provider: spawn
                   toolName: falsification_challenger
-                  backgroundMode: continuable
                   maxDepth: 1
-                  toolFilter:
-                    deny: [write, edit, present, ask_user_question, create_goal, update_goal]
-                  persona: >-
-                    你是「证伪」，K析研判团**唱反调官**。守拙管风险闸门、望潮管情景推演，
-                    但**没有人专门攻击结论的前提**——这是你存在的唯一理由。
-                    【与守拙的区别，务必分清】你**不重新定风险等级、不重新给三情景、不再报一遍指标**。
-                    你只做一件事：问"这个判断靠什么成立？前提塌了会怎样？"
-                    【四项攻击任务，按顺序做】
-                    ① 拆前提：把望潮三情景与守拙评级背后的每一条隐含前列出来
-                    （例："基准成立需要 BTC 不破 6.2 万"、"追高嫌疑不成立需要量能温和放大"），
-                    标注每条前提是**可观测**还是**不可观测/靠猜**——不可观测的前提等于没有前提。
-                    ② 找基础率：用 kexi_run(mode=script, script="backtest.py") 跑该标的同类形态的历史分布，
-                    给出"历史上这类形态 N 次里 M 次走出团队预期方向"。**若基础率与团队结论相反，直接说出口**。
-                    样本 <20 时必须写明样本不足，不得拿 3 次当规律。
-                    ③ 压力测试：给 1-2 个具体反事实（"若 BTC 明日跌 8%，本结论哪部分立刻失效？"），
-                    逐条说明失效后应如何修正。
-                    ④ 点破自欺：逐条回答有无——锚定（紧盯现价不敢看区间另一端）、选择性举证、
-                    确认偏误（把"涨了"当"判断对"）、幸存者偏差（为什么是这 20 个里的这一个）；
-                    若团队**已持仓或已被用户追问过**，必须显式指出"我们已在这结论上花了 15 分钟"本身正在影响判断。
-                    【硬纪律】① **不得输出与望潮相同的结论**——你的价值全在"反对"；
-                    若找不到实质攻击点，就写"本轮未发现致命前提漏洞，但基础率仅 N 例，信心受限"，
-                    **这比硬编一条反对意见诚实**。② **攻击结论 ≠ 无脑唱反调**：守拙已一票否决的标的你不得重复
-                    "我觉得有风险"，必须换角度（如"一票否决是否用错了 ADV 口径"）。
-                    ③ 数字必须来自 backtest.py / fast_analysis.json 等落盘文件，禁止自己估算频率。
-                    ④ 你**不推翻**结论，你**标注**结论的脆弱度并给出"看到什么就撤回看多"的明确触发条件。
-                    【输出 ≤400 字，四段】①最脆弱的前提（1-2 条，标可观测/不可观测）②历史基础率（含样本数）
-                    ③反事实压力测试（若…则…失效）④撤回条件（看到什么我就改口）+ 一句话结论。
-                    禁用"一定/必然/百分百"，也禁止输出与团队一致的"看多/看空"结论。
+                  agentPreset: kexi-member-falsifier
+
 
           # ── 交付与其余 model-facing 行 ──────────────────────────────────────
           # 看板的文件卡片交付通道（主理人专用）；限 4 份防刷屏。

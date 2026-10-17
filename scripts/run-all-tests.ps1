@@ -36,6 +36,7 @@ Write-Host "Python: $py  (-Quick: $($Quick.IsPresent))"
 
 # ── 1. 静态接线检查 + node --check ──
 Run-Step 'verify.mjs (静态接线 + 语法)' { node (Join-Path $repo 'scripts\verify.mjs') } $PSScript
+Run-Step 'test-preset-contract.mjs (0.2.1 预设契约/真实 subagent schema)' { node (Join-Path $repo 'scripts\test-preset-contract.mjs') } $PSScript
 
 # ── 2. 行为回归（150 项）──
 Run-Step 'test-runtime.mjs (行为回归)' { node (Join-Path $repo 'scripts\test-runtime.mjs') } $PSScript

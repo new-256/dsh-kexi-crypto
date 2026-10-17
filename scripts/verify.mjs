@@ -86,6 +86,13 @@ if (yaml) {
     construct(data) { jsScalars.push(String(data)); return { __jsExpr: String(data) } },
   })
   const schema = yaml.default.JSON_SCHEMA.extend([type])
+  // !!js 表达式求值用的两类 baseUrl：bundle 补丁目录（host 行）与 profile 根
+  // （preset 行实测锚点；include/customSkillDirs 都必须在该锚点下工作）。
+  const fakeBaseUrl = new URL('.', pathToFileURL(join(ROOT, 'home-plugin', 'dsh-kexi-crypto', 'cordis.patch.yml'))).href
+  const profileBaseUrls = [
+    'file:///C:/Users/lcl/AppData/Roaming/DSH%20Desktop/dsh-home/profiles/web/',
+    new URL('.', pathToFileURL(join(ROOT, 'package.json'))).href,
+  ]
   let doc
   try {
     doc = yaml.default.load(patchText, { schema })
@@ -99,6 +106,26 @@ if (yaml) {
     const preset = rows.find((r) => r.id === 'preset-kexi-crypto')
     ok(host?.name === 'dsh-kexi-crypto', 'host 行 (kexi-dashboard) 缺失或 name 不是裸包名')
     ok(preset?.name === '@deepseek-ai/dsh-agent-preset', 'preset 声明行 name 错误')
+
+    // ── 4b. 内联成员预设（v1.9.21 适配 DSH 0.2.1）────────────────────────────
+    // dsh-tool-subagent 0.2.1 起移除 persona/toolFilter/backgroundMode，角色
+    // 人格必须以独立预设存在并在主预设之前声明（委派行 apply 时 readDocument
+    // 校验引用存在）。persona 正文放包内 member-personas/*.md，经值位置 !!js
+    // （包名锚定）读入——cordis:include 的 path 按 new URL(path, ctx.baseUrl)
+    // 解析且不支持 !!js，bundle 行 baseUrl=profile 根，外部文件方案两条路都
+    // 断（v1.9.21 headless 实测），故内联。
+    const inlineMemberRows = rows.filter((r) => /^preset-kexi-member-/.test(r.id))
+    const memberPresetIds = ['kexi-member-market-data', 'kexi-member-technical', 'kexi-member-forecaster', 'kexi-member-risk', 'kexi-member-falsifier']
+    ok(inlineMemberRows.length === 5, `主补丁应内联 5 个成员预设声明行，实际 ${inlineMemberRows.length}`)
+    for (const row of inlineMemberRows) {
+      ok(rows.indexOf(row) < rows.indexOf(preset), `${row.id} 必须排在 preset-kexi-crypto 之前（注册时序）`)
+    }
+    // persona 文件经 !!js 读取（26 个标量统一在 §5 求值）；这里校验文件存在
+    for (const pid of memberPresetIds) {
+      const slug = pid.replace('kexi-member-', '')
+      ok(existsSync(join(ROOT, 'home-plugin', 'dsh-kexi-crypto', 'member-personas', `${slug}.md`)),
+        `persona 正文文件缺失: member-personas/${slug}.md`)
+    }
     if (preset) {
       const cfg = preset.config
       ok(cfg.id === 'kexi-crypto', 'config.id 应为 kexi-crypto')
@@ -113,12 +140,51 @@ if (yaml) {
       const del = plugins.find((p) => p.id === 'delegation')
       const members = (del?.config || []).filter((c) => c.config?.toolName && c.config.toolName !== 'subagent')
       ok(members.length === 5, `delegation 组内应恰好 5 个角色行（v1.5.9 加证伪红队），实际 ${members.length}`)
-      for (const m of members) {
-        ok(typeof m.config.persona === 'string' && m.config.persona.length > 50, `角色 ${m.config.toolName} persona 缺失`)
-        ok(m.config.maxDepth === 1, `角色 ${m.config.toolName} 应 maxDepth: 1（D9：0 会让首次委派即被拒）`)
-        ok(Array.isArray(m.config.toolFilter?.deny), `角色 ${m.config.toolName} 应有 toolFilter.deny`)
+      // 0.2.1 契约：委派行只允许 provider/toolName/maxDepth/agentPreset 等新 schema
+      // 字段；persona/toolFilter/backgroundMode 一出现 apply 即 throw，整组预设挂死。
+      const MEMBER_PRESET_OF = {
+        'member-market-data': { tool: 'market_data_specialist', preset: 'kexi-member-market-data' },
+        'member-technical': { tool: 'technical_indicators', preset: 'kexi-member-technical' },
+        'member-forecaster': { tool: 'trend_forecaster', preset: 'kexi-member-forecaster' },
+        'member-risk': { tool: 'risk_assessor', preset: 'kexi-member-risk' },
+        'member-falsifier': { tool: 'falsification_challenger', preset: 'kexi-member-falsifier' },
       }
-      notes.push(`plugins ${plugins.length} 行 / 成员 ${members.map((m) => m.config.toolName).join(', ')}`)
+      for (const m of members) {
+        const expect = MEMBER_PRESET_OF[m.id]
+        ok(!!expect, `未登记的成员行 id: ${m.id}`)
+        if (expect) {
+          ok(m.config.toolName === expect.tool, `${m.id} toolName 应为 ${expect.tool}，实际 ${m.config.toolName}`)
+          ok(m.config.agentPreset === expect.preset, `${m.id} agentPreset 应为 ${expect.preset}，实际 ${m.config.agentPreset}`)
+        }
+        ok(m.config.maxDepth === 1, `角色 ${m.config.toolName} 应 maxDepth: 1（D9：0 会让首次委派即被拒）`)
+        for (const dead of ['persona', 'toolFilter', 'backgroundMode']) {
+          ok(!Object.hasOwn(m.config, dead), `角色 ${m.config.toolName} 仍带 0.2.1 已移除字段 ${dead}（会导致预设挂载失败）`)
+        }
+      }
+      notes.push(`plugins ${plugins.length} 行 / 成员委派 ${members.map((m) => m.config.toolName).join(', ')}`)
+
+      // ── 4c. 五个成员预设的内容契约（从主补丁内联行读取）────────────────────
+      for (const pid of memberPresetIds) {
+        const row = inlineMemberRows.find((r) => r.config?.id === pid)
+        ok(row?.name === '@deepseek-ai/dsh-agent-preset', `成员预设 ${pid} 缺失或 name 错误`)
+        if (!row) continue
+        const plugs = row.config.plugins || []
+        const plugIds = plugs.map((p) => p.id)
+        const persona = plugs.find((p) => p.id === 'persona')
+        ok(!!persona?.config?.prefix?.__jsExpr,
+          `成员预设 ${pid} persona.prefix 必须是值位置 !!js（读 member-personas 文件）`)
+        ok(persona?.config?.includeRuntimeContext === true, `成员预设 ${pid} 应 includeRuntimeContext: true`)
+        const fsRow = plugs.find((p) => p.id === 'tool-fs')
+        ok(fsRow?.config?.write === false && fsRow?.config?.edit === false,
+          `成员预设 ${pid} 的 tool-fs 必须 write:false/edit:false（旧 toolFilter.deny 语义）`)
+        ok(plugIds.includes('kexi-plugin'), `成员预设 ${pid} 必须含 kexi-plugin（成员唯一分析手段）`)
+        // 旧 deny 名单中的工具，在成员预设里必须根本不存在（比黑名单更严）
+        for (const banned of ['tool-present', 'tool-ask-user', 'tool-goal', 'tool-todo', 'tool-web', 'tool-skill']) {
+          ok(!plugIds.includes(banned), `成员预设 ${pid} 不应挂 ${banned}（旧 deny 白名单化）`)
+        }
+        // 成员不得再委派（成员预设内零 subagent 行；与主预设 maxDepth:1 双保险）
+        ok(!plugIds.some((x) => /subagent|workflow/.test(x)), `成员预设 ${pid} 内不应有任何委派/工作流工具行`)
+      }
 
       // ── 5a. customSkillDirs 结构形态（v1.1.0 事故：列表项 + 返回数组 → [["path"]]）──
       // 必须把 !!js 挂在 **值位置**（解析为 JsExpr 对象）；若写成列表项，
@@ -140,11 +206,7 @@ if (yaml) {
     // 但 **preset 行内**的 baseUrl 是 profile 根（实测 dsh-home/profiles/<name>/），
     // 与包内目录无关。故同时也用 profile 根做一遍求值——这正是嵌套数组 bug 与
     // 相对路径错锚当初逃过校验的原因。
-    const fakeBaseUrl = new URL('.', pathToFileURL(join(ROOT, 'home-plugin', 'dsh-kexi-crypto', 'cordis.patch.yml'))).href
-    const profileBaseUrls = [
-      'file:///C:/Users/lcl/AppData/Roaming/DSH%20Desktop/dsh-home/profiles/web/',
-      new URL('.', pathToFileURL(join(ROOT, 'package.json'))).href,
-    ]
+    // （fakeBaseUrl / profileBaseUrls 已前移到 schema 定义处，供 include 校验复用）
     let jsOk = 0
     for (const src of jsScalars) {
       try {
@@ -152,7 +214,9 @@ if (yaml) {
         // ctx 携带 baseUrl；process 走全局兜底。用 with 复现同一作用域。
         const fn = new Function('ctx', 'expr', 'with (ctx) { return eval(expr) }')
         const val = fn({ baseUrl: fakeBaseUrl }, src)
-        if (src.includes('fileURLToPath') || src.includes('customSkillDirs') || src.includes('skills')) {
+        // 仅【技能根表达式】做路径可达性校验：customSkillDirs 或求值为数组的表达式。
+        // persona 读取表达式虽含 fileURLToPath，但返回的是正文文本，不在此列。
+        if (src.includes('customSkillDirs') || Array.isArray(val)) {
           // 【类型形态】customSkillDirs 必须是 string[]（曾因 `- !!js` 列表项返回数组
           // 导致 [["path"]] 嵌套，schemastery 报 "expected string but got <path>"）
           if (Array.isArray(val)) {

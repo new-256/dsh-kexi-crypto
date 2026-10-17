@@ -1,0 +1,107 @@
+OpenCLaw Windows兼容性增强已加载
+现在 'ls -F' 命令可以在PowerShell中正常工作
+仓库: C:\Users\lcl\Desktop\DSH插件开发\K析研判团
+Python: C:\Python313\python.exe  (-Quick: False)
+
+=== verify.mjs (静态接线 + 语法) ===
+  PASS    鉁?鎶€鑳?frontmatter 鍚堣 |  | verify: PASS (12 椤跺眰閿?/ 661 琛?patch)
+
+=== test-preset-contract.mjs (0.2.1 预设契约/真实 subagent schema) ===
+  PASS    鉁?kexi-member-falsifier 鏄?dsh-agent-preset 澹版槑琛?  鉁?kexi-member-falsifier 鍐呮棤 subagent 琛岋紙鎴愬憳涓嶅彲鍐嶅娲撅級锛屽彂鐜? 鏃?  鉁?kexi-member-falsifier 鎸傛湁 kexi-plugin锛堟垚鍛樺垎鏋愭墜娈碉級 |   鉁?璐熷鐓э細鏃ф牸寮忛厤缃鎷︽埅瀛楁鏁?2锛坧ersona+toolFilter锛夛紝瀹為檯 2锛坧ersona,toolFilter锛? | PRESET-CONTRACT: PASS
+
+=== test-runtime.mjs (行为回归) ===
+  PASS  ============================================================ | RUNTIME: ALL PASS  (160 閫氳繃 / 0 澶辫触) | ============================================================
+
+=== test-card-props.mjs (卡片传值) ===
+  PASS    鉁?闈?2xx 浼氳褰?HTTP 鐘舵€佺爜 |   鉁?寮圭獥鍐呮覆鏌撻敊璇í骞?  鉁?浼犲€?鈫?sessions 闈炵┖锛堣兘娓叉煋锛?  鉁?浼犲厓缁?鈫?sessions 涓虹┖锛堣繖灏辨槸鍘?bug锛? | 鉁?鍗＄墖浼犲€煎洖褰掗€氳繃
+
+=== test-card-kexi-filter.py (卡片只显 kexi 相关) ===
+  PASS  test-card-kexi-filter: 33/33 閫氳繃
+
+=== test-team-graph.py (团队关系图) ===
+  PASS  test-team-graph: 46/46 閫氳繃
+
+=== test-graph-render-rules.py (图渲染规则) ===
+  PASS  test-graph-render-rules: 16/16 閫氳繃
+
+=== test-session-findings.py (实跑取证回归) ===
+  PASS  test-session-findings: 21/21 閫氳繃
+
+=== test-regime.py (市场状态判定) ===
+  PASS  test-regime: 54/54 閫氳繃
+
+=== test-regime-log.py (regime 对账台账) ===
+  PASS  test-regime-log: 25/25 閫氳繃
+
+=== test-cex-credential-schema.py (CEX 凭据字段一致性) ===
+  PASS  test-cex-credential-schema: 31/31 閫氳繃
+
+=== test-position-doctor.py (仓位体检) ===
+  PASS  test-position-doctor: 56/56 閫氳繃
+
+=== test-dpapi-roundtrip.mjs (DPAPI 凭据往返实测) ===
+  PASS  test-dpapi-roundtrip: 28/28 閫氳繃
+
+=== test-settings-wiring.py (设置连通性) ===
+  PASS  test-settings-wiring: 108/108 閫氳繃
+
+=== test-scripts-smoke.py (全脚本冒烟) ===
+  PASS    INFO  鏃犲弬杩愯浼氭寕璧?>25s)鐨勮剼鏈? backtest.py, new_listing.py |         娴佹按绾夸粠涓嶈８璋冨畠浠紝浣嗘ā鍨嬫紡鍙傛椂浼氬鐑т竴娆¤秴鏃躲€? | test-scripts-smoke: 11/11 閫氳繃
+
+=== test-frontend-backend-parity.mjs (前后端字段匹配) ===
+  PASS  test-frontend-backend-parity: 21/21 閫氳繃锛堜粎闈欐€佹瘮瀵癸紙host 鏈繍琛岋級锛?
+
+=== test-cex-tool-serialization.mjs (工具返回值序列化) ===
+  PASS  test-cex-tool-serialization: 12/12 閫氳繃
+
+=== 成果登记运行期探针 ===
+  PASS    version = 1.9.21 |  | test-artifact-runtime: 6 閫氳繃 / 0 澶辫触
+
+=== test-runtime-bugs.mjs (现场取证 bug) ===
+  PASS    鉁?鏃у紡 pipeline:true + symbol 涓嶈鍔寔鎴?fast |  | 鉁?v1.5.4 鐜板満鍙栬瘉鍥炲綊閫氳繃
+
+=== test-hooks-order.mjs (React Hooks 顺序) ===
+  PASS    鉁?SettingsCard 閲?CEX hook 鍧楀瓨鍦?  鉁?CEX hook 鍧楀湪鏃╅€€涔嬪墠锛圚ooks 椤哄簭绋冲畾锛?  鉁?鏃╅€€鍓嶅凡澹版槑鍏ㄩ儴 9 涓?hook |  | 鉁?Hooks 椤哄簭鍥炲綊閫氳繃
+
+=== test-settings-seat.cjs (设置卡多槽位落座) ===
+  PASS  [kexi] seat settings-card: 鍏ㄩ儴鍊欓€夋Ы浣嶇洿鎺ユ敞鍐屽け璐ワ紝杞叆 inject 绛夊緟 | test-settings-seat: 12/12 閫氳繃
+
+=== test-veto-disagreement.py (硬风控否决/分歧度) ===
+  PASS    鉁?鈶?鏃ョ嚎vs鍛ㄧ嚎鑳岀琚嚜鍔ㄨ瘑鍒? |   鉁?鈶?鏃犵粨鏋勫寲缁撹鏃朵笉璇姤 |   鉁?鈶?鍒嗘 0.1 涓嶈鎶?
+
+=== test-stop-plan.py (可执行止损) ===
+  PASS    鉁?鏃犵幇浠锋椂杩斿洖鏄庣‘璇存槑鑰岄潪缂栭€? |   鉁?鐪熷疄 PYTH锛氭鎹熻惤鍦ㄥ畧鎷欏疄娴嬪尯闂?0.0685~0.0715)闄勮繎 |   鉁?鐪熷疄 PYTH锛氱粨鏋勪綅 -53.7% 琚槑纭爣娉ㄤ笉鍙敤浣滄鎹?
+
+=== test-futures-fallback.py (合约情绪 OKX 兜底) ===
+  PASS    鉁?缇庡厓鍚嶄箟 OI 宸茶绠楋紙璺ㄦ墍鍙瘮鍙ｅ緞锛? |   鉁?闄嶇骇鏃跺瀹炶鏄?provider |   鉁?甯侀噺脳鏍囪浠?鈮?缇庡厓鍚嶄箟锛堥噺绾茶嚜娲斤級
+
+=== test-fast-confidence.py (快答置信度 + 三情景区间) ===
+  PASS  test-fast-confidence: 90/90 閫氳繃
+
+=== test-prediction-log.py (决策留痕与事后对账) ===
+  PASS  test-prediction-log: 56/56 閫氳繃
+
+=== test-derivs-crosssource.py (跨所跨源矛盾检测) ===
+  PASS    鉁?鈶?绔埌绔繑鍥炰綋甯?informational_note 璇存槑 |   鉁?鈶?绔埌绔?divergences 鍙惈 actionable 椤? |   鉁?鈶?绔埌绔?informational 涓嶅惈 actionable 椤?
+
+=== test-unlock-fetch.py (解锁日历免费源) ===
+  PASS    鉁?鍙栦笉鍒版椂 consistent 涓嶈皫鎶?True |   鉁?鍙栨暟閿欒琚瀹炶浆褰? |   鉁?瑕嗙洊搴﹀彧绠楁湭鏉ヤ簨浠?
+
+=== test-cex-live-safety.py (CEX 实盘安全性质) ===
+  PASS  test-cex-live-safety: 49/49 閫氳繃
+
+=== test_batch.mjs (批量 + files 端到端) ===
+  PASS    鉁?鑴忔暟鎹闂搁棬鏍囧嚭锛堝仠鏇?401 澶?/ 鏍锋湰 40 鏍癸級 |   鉁?next 鏄庣‘瑕佹眰鍓旈櫎鑴忔暟鎹?  鉁?閫愰」 out 璺緞琚敹闆?  鉁?files 妯″紡鏍囧嚭銆愭湰杞€?  鉁?files 妯″紡鏈夊巻鍙插垎缁勮鏄? | 鉁?鎵归噺 + files 娓呭崟 绔埌绔€氳繃
+
+=== test_runmarker.mjs (本轮标记时序) ===
+  PASS    [鍘嗗彶] zhibei_final20.json  2026-10-17 12:33:40 |   鉁?鏈疆 K 绾胯鍒や负銆愭湰杞€?  鉁?涓婁竴杞骇鐗╄鍒や负銆愬巻鍙层€?  鉁?涓婁竴杞湅鏉胯鍒や负銆愬巻鍙层€? | 鉁?run 鏍囪鏃跺簭淇纭
+
+=== test_cwd_fix.mjs (脚本 CWD) ===
+  PASS    鉁?鐩稿 --out-dir 宸茬粷瀵瑰寲鍒板伐浣滃尯  [C:/Python313/python.exe C:\Users\lcl\Desktop\DSH鎻掍欢寮€鍙慭K鏋愮爺鍒ゅ洟\preset\kexi-crypto\skills\crypto-market-analysis\scripts\news_watch.py --once --out-dir C:\Users\lcl\Desktop\DSH鎻掍欢寮€鍙慭K鏋愮爺鍒ゅ洟\.kexi-test-tmp\cwd-demo\kexi_out\cwdtest] |  | 鉁?CWD 淇鐢熸晥
+
+=== Python 自测 (test_all.py 19 组) ===
+  PASS  ============================================================ | 馃帀 鍏ㄩ儴鑷祴璇曢獙鍧?100% 椤哄埄閫氳繃锛? | ============================================================
+
+==============================================================
+全部通过：33 / 33
+下一步：powershell -ExecutionPolicy Bypass -File scripts\sync-install.ps1 -Pack

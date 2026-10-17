@@ -1,5 +1,61 @@
 # 更新日志 · CHANGELOG
 
+## v1.9.21（2026-10-18）— 预设在 DSH 0.2.1 上加载失败：角色人格写在已删除字段上
+
+用户重启 DSH 后报「kexi-crypto 依然加载失败」。用**真实 dsh-app-boot 在进程内
+引导 web 配置**，直接读 `agentPresets` 注册表拿到权威诊断（非推测），五个角色行
+全部报同一条：
+
+```
+member-* (@deepseek-ai/dsh-tool-subagent): tool-subagent: persona is no longer
+supported; configure persona and tool plugins in an Agent Preset and select it
+with agentPreset (spawn only)
+```
+
+### 根因：上游 0.2.1 重构 subagent 配置，旧字段从「被忽略」变成「直接 throw」
+
+`@deepseek-ai/dsh-tool-subagent@0.2.1-alpha.5` 的 apply() 对拒绝字段逐个硬抛：
+
+```js
+for (const field of ["persona", "toolFilter"])
+  if (Object.hasOwn(config, field))
+    throw new Error(`tool-subagent: ${field} is no longer supported; ...`)
+```
+
+我们把数脉/指北/望潮/守拙/证伪五个角色的 `persona` 与 `toolFilter.deny`
+直接写在委派行 config 上（≤0.1.x 的合法写法）。0.2.1 下**一行 throw → 整组预设
+eager 激活失败 → roster `broken`，选择即 `RemoteError`**。host 半（灯/路由/设置卡）
+与此无关，一直健康，所以表现为「插件在、预设选不了」。`backgroundMode` 同批被移除。
+
+### 修复：人格与工具面拆成独立成员预设，委派行只留引用
+
+| 旧（≤0.1.x，0.2.1 挂死） | 新（0.2.1） |
+|---|---|
+| 委派行 `config.persona` | 独立 Agent Preset 的 `dsh-persona` |
+| 委派行 `toolFilter.deny:[write,edit,present,ask_user_question,create_goal,update_goal]` | 成员预设**根本不挂**这些工具；`dsh-tool-fs` 配 `write:false/edit:false`（比黑名单更严） |
+| 委派行 `backgroundMode:continuable` | 删除（字段已不存在） |
+| 每行自带人格 | 委派行 `agentPreset: kexi-member-*` 引用 |
+
+- 新增 `home-plugin/dsh-kexi-crypto/kexi-member-presets.yml`（裸 entry list，
+  5 个成员预设，含只读 fs / 检索 / jobs / 门控 shell / **kexi-plugin**——
+  成员必须能调 `kexi_run`，所以 kexi-plugin 同时挂主预设与每个成员预设）；
+- 主补丁在主预设之前加 `cordis:include` 行（id `kexi-member-presets`，
+  path `./kexi-member-presets.yml`）保证注册时序：委派行 apply 时会
+  `readDocument` 校验引用的成员预设已存在；
+- delegation 组 5 个角色行精简为 `provider/toolName/maxDepth:1/agentPreset`；
+  通用 `subagent` 行不带 agentPreset（子代理继承主理人当前预设）；
+- 5 段角色 persona 文本**零改动搬运**（生成脚本行级提取，长度逐字校验相等）。
+
+### 回归防护（这次用真实包校验，不再只查静态形状）
+
+- `scripts/test-preset-contract.mjs`（新，纳入 run-all-tests，33/33）：从**当前
+  实际安装**的 dsh-tool-subagent 源码提取 apply 拒绝字段列表（跟随上游，不硬编码）、
+  用其真实 `Config` schema 校验每个委派行、断言零拒绝字段、每个 `agentPreset`
+  引用都有声明；内置负对照确保测试本身会变红；
+- `scripts/check-preset-mount.mjs`（新，发版手动）：真实引导 web 配置，读 roster
+  的 broken 并实际 `mount('kexi-crypto')`，静态测试管形状、它管真挂载；
+- verify.mjs 增加 include 行存在/时序/path、成员预设内容契约断言。
+
 ## v1.9.20（2026-10-18）— 设置面板在 DSH 0.2.x 永久不可见：落座了一个已被移除的槽位
 
 用户报「插件失效」，全面取证后定位到 **client 设置卡在 0.2.1-alpha.5 上从未渲染过**。
