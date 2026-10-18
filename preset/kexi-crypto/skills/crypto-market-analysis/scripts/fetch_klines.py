@@ -39,7 +39,18 @@ from datetime import datetime, timezone, timedelta
 UA = {"User-Agent": "crypto-trend-analyst/1.1"}
 TZ8 = timezone(timedelta(hours=8))
 
-# Binance symbol -> CoinGecko coin id (extend as needed)
+# Binance symbol -> CoinGecko coin id。
+#
+# v1.9.22 (D5)：这张表**不再是白名单**，只是**常用币的速查缓存**。
+# 早先它是唯一来源（15 项），任何表外币即使符号正确，CoinGecko 回退路径
+# 也必然失败（"no CoinGecko id mapping for XXX"）。这违反"研发优先泛用方案"
+# 的原则——不能因为某个币不在我手写的清单里就判它取不到数。
+#
+# 现在的解析顺序：
+#   ① 静态表命中 → 直接用（省一次网络请求）
+#   ② 未命中 → 查 CoinGecko /coins/list 全量币表（约 15k 项），按 symbol 匹配
+#   ③ 结果缓存 7 天到 <cwd>/kexi_out/.cache/cg_coins_list.json
+#   ④ 网络不可用且未命中 → **明确报错**，绝不"猜一个"
 CG_IDS = {
     "BTCUSDT": "bitcoin", "ETHUSDT": "ethereum", "BNBUSDT": "binancecoin",
     "SOLUSDT": "solana", "XRPUSDT": "ripple", "DOGEUSDT": "dogecoin",
@@ -65,10 +76,39 @@ BINANCE_HOSTS = ["api.binance.com", "api1.binance.com", "api2.binance.com",
                  "api3.binance.com", "api4.binance.com"]
 
 
-def http_get(url, retries=3, timeout=15):
-    """GET with exponential backoff. 4xx(非429) 属参数类错误，不重试。"""
+def _normalize_symbol(raw):
+    """v1.9.22：转发到 kline_utils 的唯一真源实现。
+
+    为什么不在本文件重复写一份：**三处入口各写一遍 .toUpperCase()
+    正是这个缺陷长期没修好的原因**。这里只做转发，保证口径一致。
+    延迟导入（函数内 import）是为了避免 fetch_klines ←→ kline_utils
+    的模块级循环依赖：kline_utils 不依赖本模块，但入口顺序不该成为隐患。
+    """
+    try:
+        import kline_utils as _ku
+        return _ku.normalize_symbol(raw)
+    except Exception:
+        # 兜底：极端情况下 kline_utils 不可用，退化为最小校验，
+        # 但**仍然是显式补后缀**而不是原样透传（否则就回到旧缺陷）。
+        s = str(raw or "").strip().upper().replace("/", "").replace("-", "").replace("_", "")
+        if not s:
+            return {"symbol": None, "error": "符号为空", "note": None, "changed": False}
+        if not s.endswith("USDT") and s not in ("USDT", "USDC", "USD", "BUSD"):
+            s = s + "USDT"
+        return {"symbol": s, "error": None, "note": None, "changed": True}
+
+
+def http_get(url, retries=3, timeout=15, deadline=None):
+    """GET with exponential backoff. 4xx(非429) 属参数类错误，不重试。
+
+    v1.9.22：新增 deadline（Unix 秒时间戳）。网络层失败（连接重置/超时）
+    会走完 retries × 退避，5 host × 3 retry 就是 30s+；传入 deadline 后
+    每次重试前检查，超时立即抛错，让上层轮询链能真正"到点收手"。
+    """
     last = None
     for i in range(retries):
+        if deadline is not None and time.time() > deadline:
+            raise RuntimeError(f"request deadline exceeded after {i} attempt(s): {last or 'no attempt completed'}")
         try:
             req = urllib.request.Request(url, headers=UA)
             with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -76,7 +116,11 @@ def http_get(url, retries=3, timeout=15):
         except urllib.error.HTTPError as e:
             last = e
             if 400 <= e.code < 500 and e.code != 429:
-                break
+                # v1.9.22：**立刻抛出，不再走退避**。
+                # 早先虽然也 break，但仍执行了 time.sleep(2 ** i)（最长 4 秒），
+                # 且异常信息里看不到 "400" 之外的结构化线索，上层无从判断
+                # "这是参数错还是网络错"。现在直接带上状态码抛出。
+                raise RuntimeError(f"HTTP {e.code} {e.reason or ''}".strip())
             time.sleep(2 ** i)
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as e:
             last = e
@@ -84,19 +128,46 @@ def http_get(url, retries=3, timeout=15):
     raise RuntimeError(f"request failed after {retries} attempts: {last}")
 
 
-def fetch_binance(symbol, interval, limit):
-    """按 data-sources.md 依次尝试 api / api1~api4。"""
+def fetch_binance(symbol, interval, limit, time_budget=10.0):
+    """按 data-sources.md 依次尝试 api / api1~api4。
+
+    v1.9.22：**HTTP 400 立即终止整条轮询链**。
+    400 是参数类错误（symbol 不存在 / interval 非法 / limit 越界），
+    换一个域名必然还是 400——五个 host 全跑一遍纯粹是浪费时间。
+    现场实测：不存在的符号走完 5 host × 3 retry 要 10 秒，
+    20 币就是 120 秒；短路后单币 <1 秒。
+
+    v1.9.22：**整条 host 链加总预算 deadline**（默认 10s）。
+    400 短路挡得住"参数错误"，但挡不住**连接层失败**（网络重置/超时/地域
+    拦截 451）——那种情况下每个 host 仍会走 3 次重试，5 host 就是 30s+。
+    实测本机 api.binance.com 连接不稳定，一次选币全会话曾耗 118 秒。
+    到点即放弃剩余域名并如实报出已尝试结果。
+    """
+    deadline = time.time() + max(1.0, float(time_budget))
     errors = []
     for host in BINANCE_HOSTS:
+        if time.time() > deadline:
+            errors.append("已超过币安轮询总预算 %.0fs，停止尝试剩余域名" % float(time_budget))
+            break
         url = (f"https://{host}/api/v3/klines"
                f"?symbol={symbol.upper()}&interval={interval}&limit={limit}")
         try:
-            raw = http_get(url)
+            raw = http_get(url, deadline=deadline)
             klines = [[int(k[0]), float(k[1]), float(k[2]), float(k[3]), float(k[4]), float(k[5])]
                       for k in raw]
             return klines, ([f"Binance 主域名不可用，已切到 {host}"] if host != BINANCE_HOSTS[0] else [])
         except Exception as e:
             errors.append(f"{host}: {e}")
+            # 400 = 参数错误：换域名不会有不同结果，立刻跳出。
+            if "400" in str(e) or "Bad Request" in str(e):
+                errors.append("（HTTP 400 属参数类错误，已停止轮询其余域名——"
+                              "多为交易对不存在或周期非法）")
+                break
+            # 451 = 地域拦截：换域名同样是拦截，继续试无意义，立刻跳出。
+            if "451" in str(e) or "Forbidden" in str(e):
+                errors.append("（HTTP 451 地域拦截，已停止轮询其余域名——"
+                              "本机出口 IP 在该地区被币安拒绝）")
+                break
     raise RuntimeError(" | ".join(errors))
 
 
@@ -147,9 +218,9 @@ def fetch_okx(symbol, interval, limit):
 
 
 def fetch_coingecko(symbol, interval, limit):
-    coin = CG_IDS.get(symbol.upper())
+    coin, note = resolve_coingecko_id(symbol)
     if not coin:
-        raise RuntimeError(f"no CoinGecko id mapping for {symbol}; add it to CG_IDS")
+        raise RuntimeError(note or f"无法解析 {symbol} 的 CoinGecko id")
     days = CG_DAYS.get(interval, 90)
     if days not in CG_VALID_DAYS:
         raise RuntimeError(f"CoinGecko OHLC 不接受 days={days}，合法值 {CG_VALID_DAYS}")
@@ -176,9 +247,10 @@ def fetch_quote(symbol):
                 "volume_24h": float(d["quoteVolume"]),
                 "high_24h": float(d["highPrice"]), "low_24h": float(d["lowPrice"])}
     except Exception as e1:
-        coin = CG_IDS.get(symbol.upper())
+        # v1.9.22 (D5)：不再只查静态表，改走动态解析器
+        coin, note = resolve_coingecko_id(symbol)
         if not coin:
-            raise RuntimeError(f"binance failed ({e1}); no coingecko mapping")
+            raise RuntimeError(f"binance failed ({e1}); {note or 'CoinGecko id 无法解析'}")
         d = http_get(f"https://api.coingecko.com/api/v3/simple/price"
                      f"?ids={coin}&vs_currencies=usd&include_24hr_change=true"
                      f"&include_24hr_vol=true")[coin]
@@ -194,6 +266,21 @@ def detect_step_ms(klines):
         return None
     ds = sorted(klines[i + 1][0] - klines[i][0] for i in range(len(klines) - 1))
     return ds[len(ds) // 2]
+
+
+# ── v1.9.22 (D5)：CoinGecko 币表解析已拆到 cg_registry.py（用户规则26 单文件≤600行）──
+# 这里只做转发，保持 fetch_klines 内部调用点不变。
+# 早先 CG_IDS 是硬编码 15 项的白名单且是唯一来源，表外币必然取数失败；
+# 现在静态表降级为速查缓存，未命中时查全量币表（约 2 万项）并缓存 7 天。
+from cg_registry import CG_IDS, resolve_coingecko_id  # noqa: E402
+
+# v1.9.22：把本模块的 http_get 注入 cg_registry，让它查全量币表时复用
+# 同一套 UA / 超时 / deadline 语义，而不是另起一套 urllib 调用。
+try:
+    import cg_registry as _cg
+    _cg.set_http_get(lambda url, timeout=20: http_get(url, timeout=timeout))
+except Exception:
+    pass
 
 
 def humanize_ms(ms):
@@ -277,17 +364,28 @@ def main():
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
-    result = {"symbol": args.symbol.upper(), "interval": args.interval,
+    # ── v1.9.22 (D1)：符号规范化 ─────────────────────────────────────
+    # 早先 args.symbol.upper() 原样透传，"BTC" 会挨个打 CG_IDS / Binance / OKX
+    # 三个源全部失败。这里接入共享的 normalize_symbol（唯一真源）。
+    _norm = _normalize_symbol(args.symbol)
+    if _norm["error"]:
+        print(json.dumps({"symbol": args.symbol, "error": "符号非法：" + _norm["error"],
+                          "klines": [], "bars": 0}, ensure_ascii=False, indent=2))
+        sys.exit(2)
+    symbol = _norm["symbol"]
+    _sym_warn = [_norm["note"]] if _norm.get("note") else []
+
+    result = {"symbol": symbol, "interval": args.interval,
               "interval_actual": None, "source": None,
               "fetched_at": datetime.now(TZ8).isoformat(),
               "klines": [], "bars": 0, "last_closed_open": None,
               "last_bar_age_days": None,
               "dropped_open_bar": 0, "duplicates_removed": 0, "gaps": [],
-              "warnings": [], "error": None}
+              "warnings": list(_sym_warn), "error": None}
 
     try:
         if args.quote:
-            result["quote"] = fetch_quote(args.symbol)
+            result["quote"] = fetch_quote(symbol)
             result["source"] = result["quote"]["source"]
         else:
             errors = []
@@ -296,9 +394,9 @@ def main():
             for src in order:
                 try:
                     if src == "binance":
-                        result["klines"], w = fetch_binance(args.symbol, args.interval, args.limit)
+                        result["klines"], w = fetch_binance(symbol, args.interval, args.limit)
                     elif src == "okx":
-                        result["klines"], w = fetch_okx(args.symbol, args.interval, args.limit)
+                        result["klines"], w = fetch_okx(symbol, args.interval, args.limit)
                     else:
                         result["klines"], w = fetch_coingecko(args.symbol, args.interval, args.limit)
                     result["source"] = src
@@ -392,6 +490,51 @@ def main():
             return
         with open(args.out, "w", encoding="utf-8") as f:
             f.write(text)
+
+        # ── v1.9.22 (D10)：**写后回读校验** ──────────────────────────────
+        # 现场取证（session-44da005c，成员实证）：digest 显示数据新鲜，
+        # 但写进 kexi_out/ 的文件内容止于 10-05。5 个币因此被误判
+        # 「停更 13 天」并建议弃用，靠主理人手工复核才纠正。
+        # 元数据与产物内容不一致且不报错，是**数据正确性**缺陷，比报错更危险。
+        #
+        # 这里写完立刻回读，比对：
+        #   ① 文件里的 bars 是否等于内存中的 bars
+        #   ② 文件里最后一根 K 线的时间戳是否等于内存中的
+        # 不一致 → 非零退出码，绝不"报告成功"。
+        try:
+            with open(args.out, encoding="utf-8") as f:
+                _rb = json.load(f)
+            _rb_kl = _rb.get("klines") or []
+            _mem_last = result["klines"][-1][0] if result["klines"] else None
+            _rb_last = _rb_kl[-1][0] if _rb_kl else None
+            if len(_rb_kl) != len(result["klines"]) or _mem_last != _rb_last:
+                msg = (f"落盘校验失败：{args.out} 回读得到 {len(_rb_kl)} 根/末根 {_rb_last}，"
+                       f"与内存中 {len(result['klines'])} 根/末根 {_mem_last} 不一致——"
+                       f"产物内容与本次取数不符，下游不得使用该文件")
+                result["error"] = msg
+                result["self_check"] = {"ok": False, "reason": msg}
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+                sys.exit(4)
+            # 校验通过：把结果里的自检信息一并写出，供上层机械复核
+            result["self_check"] = {
+                "ok": True,
+                "bars": len(result["klines"]),
+                "last_closed_open": result.get("last_closed_open"),
+                "last_bar_age_days": result.get("last_bar_age_days"),
+                "source": result.get("source"),
+                "written_bytes": os.path.getsize(args.out),
+            }
+            # 重写一次，把 self_check 带进文件（供 kexi-plugin 的质检读取）
+            with open(args.out, "w", encoding="utf-8") as f:
+                json.dump(result, f, ensure_ascii=False, indent=2)
+        except SystemExit:
+            raise
+        except Exception as e:
+            msg = f"落盘校验异常：{args.out} 无法回读（{str(e)[:120]}）"
+            result["error"] = msg
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            sys.exit(4)
+
         print(f"saved {result['bars']} klines -> {args.out} "
               f"(source={result['source']}, actual={result['interval_actual']}, "
               f"dropped_open={result['dropped_open_bar']}, warnings={len(result['warnings'])})")

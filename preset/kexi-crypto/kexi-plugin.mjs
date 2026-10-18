@@ -26,6 +26,8 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join, isAbsolute, resolve as presolve } from 'node:path'
 import { mkdirSync, existsSync, readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
+// v1.9.22：符号规范化的唯一真源。三处入口一律走它，禁止各自 .toUpperCase()。
+import { normalizeSymbol, normalizeSymbols } from './lib/symbol-normalize.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 
@@ -94,6 +96,10 @@ const SCRIPT_WHITELIST = new Set([
   'explorer_config.py', 'ablation_compare.py',
   // v1.5.9 新增（决策留痕与事后对账：record 落盘"当时说了什么"，reconcile 事后对账）
   'prediction_log.py',
+  // v1.9.22 新增（CoinGecko 全量币表解析，从 fetch_klines 拆出的独立模块）
+  'cg_registry.py',
+  // v1.9.22 新增（独立数值复核：从原始 K 线重算，与落盘产物逐项比对）
+  'verify_numbers.py',
 ])
 
 const MAX_OUT_BYTES = 2 * 1024 * 1024
@@ -339,6 +345,41 @@ async function runBatch(ctx, exec, root, scriptsDir, script, batch) {
   // 做法：直接读**产出文件**取 bars / as_of（as_of 用来算停更天数）。
   const STALE_DAYS = 3
   const MIN_BARS = 120
+
+  // ── v1.9.22 (D4)：产物语义校验 ──────────────────────────────────────
+  // 现场取证：kexi_out/ 里 BTCUSDT_1d_position.json 与 _1d_indicators.json
+  // **SHA256 完全相同**，且"position"文件里根本没有任何 pos_90 / drawdown 字段。
+  // 成因是某次 batch 传错 --out（把 indicators.py 的输出写成 _position.json），
+  // 而工具层对 --out 与 script 的语义不匹配**零校验**，静默写成了体检数据。
+  // 下游若按文件名消费，拿到的是指标 JSON —— 位置/回撤/拥挤度全部失真或缺失，
+  // 并且**不会报错**。数据错误不报错，比报错危险得多。
+  //
+  // 做法：从产出 JSON 的**实际字段**反推"这份数据是什么"，再与文件名比对。
+  // 不自动改名（改名会让调用方按原路径找不到文件），只如实标记。
+  const ARTIFACT_SIGNATURES = [
+    { kind: 'position', fileHint: /_position\b|position_/i, fields: ['pos_90', 'drawdown', 'range_90'] },
+    { kind: 'indicators', fileHint: /_indicators\b|indicators_/i, fields: ['ma', 'ema', 'macd', 'rsi'] },
+    { kind: 'klines', fileHint: /_klines\b|klines_/i, fields: ['klines'] },
+    { kind: 'entry_plan', fileHint: /_entry(_plan)?\b|entry_plan_/i, fields: ['entry_now', 'entry_action', 'invalidation'] },
+    { kind: 'fast_analysis', fileHint: /fast_analysis/i, fields: ['rows', 'elapsed_ms'] },
+  ]
+  function detectArtifactKind(d) {
+    if (!d || typeof d !== 'object') return null
+    for (const sig of ARTIFACT_SIGNATURES) {
+      if (sig.fields.some((f) => Object.prototype.hasOwnProperty.call(d, f))) return sig.kind
+    }
+    return null
+  }
+  function semanticMismatch(outPath, d) {
+    if (!outPath || !d) return null
+    const name = String(outPath).split(/[\\/]/).pop() || ''
+    const actual = detectArtifactKind(d)
+    if (!actual) return null      // 认不出内容就不妄下结论
+    const claimed = ARTIFACT_SIGNATURES.find((s) => s.fileHint.test(name))
+    if (!claimed || claimed.kind === actual) return null
+    return `产物语义不符：文件名 ${name} 看起来是 ${claimed.kind}，实际内容是 ${actual}`
+  }
+
   function qualityOf(item, outPath) {
     let d = null
     try { d = JSON.parse(readFileSync(outPath, 'utf8')) } catch (e) { d = null }
@@ -347,6 +388,16 @@ async function runBatch(ctx, exec, root, scriptsDir, script, batch) {
       : (d.data_quality && typeof d.data_quality.bars === 'number' ? d.data_quality.bars : undefined)
     const asOf = typeof d.as_of === 'string' ? d.as_of : (d.data_quality && d.data_quality.as_of)
     const flags = []
+
+    // D4：产物语义不符 —— 这是"数据静默错位"，与停更同级必须剔除
+    const mismatch = semanticMismatch(outPath, d)
+    if (mismatch) flags.push(mismatch)
+
+    // D10：落盘自检信息（fetch_klines.py 写盘后回读校验的结果）
+    if (d.self_check && d.self_check.ok === false) {
+      flags.push(`落盘校验失败：${String(d.self_check.reason || '').slice(0, 100)}`)
+    }
+
     let age = null
     if (asOf) {
       const m = String(asOf).match(/(\d{4})-(\d{2})-(\d{2})/)
@@ -771,14 +822,18 @@ export function apply(ctx) {
       // 用户反馈"结果出来币价都涨了几个点"就是这个代价。
       // 本模式把整条链收进一次工具调用，口径与团队流程**完全一致**（同一批脚本）。
       if (args.mode === 'fast') {
-        const syms = []
-        if (args.symbol) syms.push(String(args.symbol).toUpperCase().trim())
-        if (args.symbols) {
-          String(args.symbols).split(',').forEach((s) => {
-            const t = s.trim().toUpperCase()
-            if (t) syms.push(t)
-          })
+        // v1.9.22 (D1)：符号规范化。现场取证——传裸符号 "BTC" 时三条下游路径
+        // 同时失败（CG_IDS 无键 / Binance 400 / OKX 51001），20 币全灭且耗时
+        // 120 秒。这里是**唯一入口**，改写结果必须回显，不能静默。
+        const norm = normalizeSymbols([args.symbol, args.symbols].filter((x) => x != null && x !== ''))
+        if (norm.errors.length) {
+          return {
+            ok: false,
+            error: `符号非法：${norm.errors.join('；')}`,
+            next: '把标的写成完整交易对（如 BTCUSDT），或只写基币（如 BTC，会自动补 USDT）。',
+          }
         }
+        const syms = norm.symbols
         if (!syms.length) return { ok: false, error: 'mode=fast 需要 symbol 或 symbols（逗号分隔）' }
         const outDir = join(root0, 'kexi_out')
         const argv = [join(scriptsDir, 'fast_analysis.py'), '--out-dir', outDir]
@@ -796,17 +851,47 @@ export function apply(ctx) {
         // 结论与预期不符却无人察觉。要么真传下去，要么明确报错，不能装没看见。
         if (args.source) argv.push('--source', String(args.source))
         const fr = await runPython(ctx, exec, argv, root0)
-        if (!fr.ok) return { ok: false, error: fr.error, digest: fr.digest || '' }
         const parsed = fr.parsed || {}
         const files = [join(outDir, 'fast_analysis.json'), join(outDir, 'fast_analysis.md')]
+
+        // v1.9.22 (D2)：真实成败。早先只要进程 exit 0 就返回 ok:true——
+        // 而 fast_analysis.py 不管取数成败都 exit 0 并打印 {"ok":true}，
+        // 于是"20 币全部取数失败"在结构化返回值里表现为**完全成功**。
+        // 现场代价：主理人拿到 ok:true 却看到 digest 写着"取数失败"，
+        // 被误导追加了 6 次排障调用。
+        // 现在：脚本自己的 ok 说了算；进程失败或脚本 ok=false 一律 ok:false。
+        const scriptOk = parsed.ok
+        const degraded = parsed.degraded === true
+        const failedSyms = Array.isArray(parsed.failed_symbols) ? parsed.failed_symbols : []
+        const normNotes = norm.notes
+
+        if (!fr.ok || scriptOk === false) {
+          return {
+            ok: false,
+            error: clip(String(fr.error || parsed.error || '快研失败'), 600),
+            digest: clip(String(fr.stdout || ''), 1500),
+            out_files: files.filter((f) => existsSync(f)),
+            next: failedSyms.length
+              ? `失败标的：${failedSyms.join(', ')}。先修取数再重试，不要用记忆数据顶替。`
+              : '检查数据源可达性与符号拼写后重试。',
+          }
+        }
+
         try { markArtifacts(root0, files) } catch (e) { /* ignore */ }
+        const head = normNotes.length ? `符号规范化：${normNotes.join('；')}\n` : ''
         return {
           ok: true,
-          digest: clip(String(fr.stdout || ''), 1800),
+          digest: clip(head + String(fr.stdout || ''), 1800),
           out_files: files.filter((f) => existsSync(f)),
-          next: `秒级快答（${parsed.elapsed_ms != null ? parsed.elapsed_ms + 'ms' : '~1s'}）。`
-            + '若用户要成员交叉验证/深度论证再升级 kexi_run(mode=pipeline) 或派活团队——'
-            + '本结果的 fast_analysis.json 可直接喂给团队，无需重算。',
+          // 部分失败不能装看不见：ok 仍为 true（有可用结果），但 degraded 明确置位，
+          // digest 里列出失败币，next 直接指向"剔除"而不是"重试掩盖"。
+          degraded,
+          failed_symbols: failedSyms,
+          next: degraded
+            ? `${failedSyms.join(', ') || '部分标的'} 取数失败——按铁律直接剔除，不得写脚本重试掩盖`
+            : `秒级快答（${parsed.elapsed_ms != null ? parsed.elapsed_ms + 'ms' : '~1s'}）。`
+              + '若用户要成员交叉验证/深度论证再升级 kexi_run(mode=pipeline) 或派活团队——'
+              + '本结果的 fast_analysis.json 可直接喂给团队，无需重算。',
         }
       }
 
@@ -846,8 +931,12 @@ export function apply(ctx) {
       const root = workspaceRoot(ctx, exec)
       const outDir = join(root, 'kexi_out')
       try { mkdirSync(outDir, { recursive: true }) } catch (e) { /* 已存在或无权限：脚本会各自报错 */ }
-      const sym = String(args.symbol || '').toUpperCase().trim()
+      // v1.9.22 (D1)：pipeline 入口同样走唯一真源，不再各自 toUpperCase()。
+      const pn = normalizeSymbol(args.symbol)
+      if (pn.error) return { ok: false, error: `符号非法：${pn.error}` }
+      const sym = pn.symbol
       if (!sym) return { ok: false, error: 'pipeline 模式需要 symbol（如 BTCUSDT）' }
+      const symNote = pn.note ? `${pn.note}` : ''
       // v1.4.6 确定性兜底：真正的研判调用发生时，若模型跳过了提示词第 0 步
       // （kexi_ensure_team），这里幂等补建持久团队，保证原生面板始终 5 人。
       // 只在 lead 会话生效、每会话只试一次、尊重 persistentTeam 开关。
@@ -1735,6 +1824,21 @@ export function apply(ctx) {
       + 'target 传成员代号 shuma(数脉·取数) → zhibei(指北·指标) → wangchao(望潮·情景) → shouzhuo(守拙·风控) → zhengfu(证伪·唱反调)'
       + '（**target 必须是英文代号，传中文名会报 active teammate not found**）；'
       + '成员结论为权威、不代写不篡改；仅对极简单的速答才主理人亲自 kexi_run(mode=pipeline) 出看板，并如实说明走了捷径。',
+    '1a) **建了队就必须派活（v1.9.22）**：kexi_ensure_team 只是把成员准备好，'
+      + '**建完不派活等于白建**——现场取证里出现过「建了 5 人团队、0 人派活、主理人独答」的情况。'
+      + '命中以下任一条即**必须至少派 2 位成员、不得主理人独答**：'
+      + '①多标的组合决策（选币 N 个/对比/我的持仓怎么调）②涉及真实资金动作（买卖加减仓/止损设哪/要不要割）'
+      + '③需权衡取舍给倾向性结论（现在能不能买/哪个更好/值不值得）④结论会被用户直接拿去执行。'
+      + '只有「单标的事实性查询」「单标的纯技术面描述且用户没问该不该做」「纯信息整理」「用户明说快速看一眼」'
+      + '才可走快速通道独答。**若团队已就绪而请求命中上述判据，下一步必须是 send_message，不得直接进入汇编。**',
+    '1d) **仓位类请求走 Workflow O（v1.9.22）**：「仓位诊断/持仓分析/该不该减仓/仓位体检」等'
+      + '围绕**用户已有持仓**的请求，早先 A~N 没有任何一条覆盖，是规则空白（现场表现为主理人独答）。'
+      + '现在必须派活：position_doctor.py 出调仓意见 → zhibei 对持仓内各标的做技术复检 → '
+      + 'shouzhuo 按当前大盘环境定风险等级与减仓优先级（可执行止损位）→ 主理人汇编「留/减/清」三档 + 触发条件。'
+      + '**O 不产生订单意图**（要下单走 Workflow G）。',
+    '1e) **等待期纪律（v1.9.22）**：wait_agent 超时（timedOut:true）不是失败，但不得原地重试；'
+      + '应立即 list_agents 看谁在跑，然后**并行推进**自己可做的部分（独立复算/交叉核验/准备汇编骨架）；'
+      + '连续 2 次超时必须向用户通报当前进度，不得静默等待——用户侧会表现为「回答突然中断」。',
     '1c) **红队强制（v1.5.9）**：守拙管风险闸门、望潮管情景推演，但**没有人专门攻击结论的前提**——这是编排的真实空缺。'
       + '故深研派活时**证伪必须最后派、且必须真派**：把望潮三情景与守拙评级原文发给 zhengfu，'
       + '要求他输出①最脆弱前提（标可观测/不可观测）②backtest.py 基础率（含样本数）③反事实压力测试④撤回条件。'
@@ -1769,6 +1873,14 @@ export function apply(ctx) {
       + '⑥CEX 相关结论必须区分"这是链上公开数据"还是"这是你的真实账户数据"，不要混为一谈；'
       + '⑦被风控（cex_risk）拦截时如实转述拦截原因，**不要换个参数再试**试图绕过。',
     '9) 批量与产物溯源纪律（v1.5.2）：①**禁止手写 Python 跑分析**——多标的批量一律用 kexi_run(mode=script, script=…, batch={items, args:["--input","kexi_out/{item}_1d_klines.json","--out","kexi_out/{item}_1d_indicators.json"], concurrency:4})，一次调用跑完 N 个标的（2026-09-29 实测：因缺批量能力，成员手写 4 个 Python 脚本，其中 1 个 SyntaxError 崩掉整轮返工）；②批量结果自带脏数据闸门，被标 ⚠ 的（停更/样本不足）按铁律直接剔除，**不要写脚本重试掩盖**；③引用任何产物前先 kexi_run(mode=files) 看本轮/历史分组——只引用【本轮】，【历史】是上一轮及更早的文件（实测主理人曾把上一轮的 zhibei_final20.json 当本轮产物反复排查）。',
+    '9b) **需要独立复核时用官方入口，不要手写 Python（v1.9.22）**：现场取证里主理人在一轮会话中调了 25 次 pwsh、'
+      + '其中 **14 次是内联 python -c 手写脚本**直接打交易所接口复算 RSI/位置——而同一份人设里明写着「禁止手写 Python」。'
+      + '规则与行为冲突的根因不是模型不守规矩，而是**确实没有正规的复核入口**。现在有了：'
+      + '①核对落盘产物是否可信 → kexi_run(mode=script, script="verify_numbers.py", args=["--symbol","BTCUSDT","--out-dir","kexi_out"])，'
+      + '它只读**原始 K 线**重算指标/位置，再与 indicators/position 产物逐项比对（相对容差 0.5%），'
+      + '并识别「文件名是 position 内容却是指标」这类语义错位；'
+      + '②核实某个具体数字（如成员报了 RSI=31.7） → 加 --check rsi14=31.7，它会告诉你重算值是多少、差多少。'
+      + '**注意**：verify_numbers 只如实列出差异，**不替你裁决谁对**——差异是数据源问题还是产物被污染，由你据差异定位。',
   ].join('\n')
   ctx.effect(() => ctx.systemPrompt.section({
     name: 'kexi:policy',

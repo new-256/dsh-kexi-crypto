@@ -5,6 +5,9 @@ __pycache__/
 # 开发沙盒（verify/smoke 的重建产物，不随包分发）
 .scratch/
 
+# 调试临时目录（会话取证/一次性实测产物，不入库）
+.kexi-test-tmp/
+
 # 运行时输出约定目录（用户工作区里由 kexi_* 工具生成）
 kexi_out/
 

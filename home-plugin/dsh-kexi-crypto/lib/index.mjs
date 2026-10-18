@@ -34,7 +34,7 @@ import { dirname, join, isAbsolute } from 'node:path'
 // PLUGIN_VERSION_FALLBACK 是给"读不到文件"兜底的常量。scripts/verify.mjs 会断言它
 // 与 package.json 的 version 一致——这样"忘记同步"会**让测试变红**，
 // 而不是让用户看到过期版本号还找不到原因。
-const PLUGIN_VERSION_FALLBACK = '1.9.21'
+const PLUGIN_VERSION_FALLBACK = '1.9.22'
 let PLUGIN_VERSION = PLUGIN_VERSION_FALLBACK
 try {
   let dir = dirname(fileURLToPath(import.meta.url))

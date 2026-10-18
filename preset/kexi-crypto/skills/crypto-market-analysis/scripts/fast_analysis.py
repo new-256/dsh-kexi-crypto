@@ -101,8 +101,14 @@ def extreme_moves(klines, limit=3):
 
 
 # ─────────────────────────── 取数（带复用） ───────────────────────────
-def load_or_fetch(symbol, interval, limit, out_dir, refresh=False):
-    """优先复用本地已收盘 K 线；过期或缺失才联网。返回 (klines, meta)。"""
+def load_or_fetch(symbol, interval, limit, out_dir, refresh=False, budget=10.0):
+    """优先复用本地已收盘 K 线；过期或缺失才联网。返回 (klines, meta)。
+
+    budget：币安轮询链的**单次总预算秒数**（透传给 fetch_binance 的 deadline）。
+    v1.9.22：BTC/ETH 参照取数失败本就无关紧要（main 里 except pass），
+    但早先它也走完整 10s deadline——本机币安网络层不稳时，两个参照币
+    就能吃掉 20s，把全局取数预算耗光。参照币应传 budget=3，主币用默认。
+    """
     path = os.path.join(out_dir, f"{symbol}_{interval}_klines.json")
     if not refresh and os.path.exists(path):
         try:
@@ -134,7 +140,7 @@ def load_or_fetch(symbol, interval, limit, out_dir, refresh=False):
         # 强制币安：取不到就明确失败，**不静默降级**——
         # 模型传 source:'binance' 是为了"要正规口径"，偷偷换源会毁掉这个意图
         try:
-            klines, warns = fk.fetch_binance(symbol, interval, limit)
+            klines, warns = fk.fetch_binance(symbol, interval, limit, time_budget=budget)
             src = "binance"
         except Exception as e:
             return None, {"source": "binance", "error":
@@ -168,7 +174,7 @@ def load_or_fetch(symbol, interval, limit, out_dir, refresh=False):
         # 不预设持仓所在交易所：永远选最新价，来源在 meta 里如实标注。
         cands = []
         try:
-            kb, wb = fk.fetch_binance(symbol, interval, limit)
+            kb, wb = fk.fetch_binance(symbol, interval, limit, time_budget=budget)
             if kb:
                 cands.append(("binance", kb, wb))
         except Exception:
@@ -804,6 +810,10 @@ def main():
                     help="数据源：auto=自动降级链（默认）；指定 binance/coingecko 则只取该源，"
                          "取不到即失败——**绝不静默换源**，否则你以为拿到了正规口径，"
                          "实际是 4 天粒度的降级数据（v1.5.7 现场修：kexi_run 曾静默丢弃此参数）")
+    ap.add_argument("--time-budget", type=float, default=90.0,
+                    help="全局取数预算（秒，默认 90）。v1.9.22 新增——"
+                         "错误符号会跑满 5 host × 3 retry，20 币曾耗 120 秒。"
+                         "超预算后**停止后续取数**并如实标记，不做静默跳过")
     args = ap.parse_args()
     forced_source = (args.source or "auto").lower()
     # load_or_fetch 与 main 分处不同作用域；本脚本是单线程 CLI，
@@ -812,18 +822,37 @@ def main():
     _FORCED_SOURCE = forced_source
 
     syms = []
+    sym_notes = []
+    sym_errors = []
     for raw in (args.symbol, args.symbols):
         if not raw:
             continue
         # --symbol 与 --symbols 都接受逗号分隔：模型与用户都会顺手写 "A,B"，
         # 只认单值时报 "no CoinGecko id mapping for A,B" 这种误导性错误。
-        for part in str(raw).split(","):
-            t = part.strip().upper()
-            if t and t not in syms:
-                syms.append(t)
+        #
+        # v1.9.22 (D1)：走 kline_utils.normalize_symbols 唯一真源。
+        # 早先只 .strip().upper()，"BTC" 原样透传到下游 →
+        # CG_IDS 查不到（键是 BTCUSDT）、Binance 400、OKX 51001，20 币全灭。
+        n = ku.normalize_symbols(str(raw))
+        sym_errors.extend(n["errors"])
+        for nt in n["notes"]:
+            if nt not in sym_notes:
+                sym_notes.append(nt)
+        for s in n["symbols"]:
+            if s not in syms:
+                syms.append(s)
+
+    if sym_errors:
+        # 符号非法是**调用方的错误**，不是"这个币没数据"。立刻失败，
+        # 不发任何网络请求——这是 D3 性能预算里最有效的一层短路。
+        print(json.dumps({"ok": False, "error": "符号非法：" + "；".join(sym_errors),
+                          "count": 0, "rows": []}, ensure_ascii=False))
+        return 2
     if not syms:
         print(json.dumps({"ok": False, "error": "需要 --symbol 或 --symbols"}, ensure_ascii=False))
         return 1
+    for nt in sym_notes:
+        print(f"[符号规范化] {nt}")
 
     out_dir = args.out_dir or os.path.join(os.getcwd(), "kexi_out")
     try:
@@ -835,10 +864,13 @@ def main():
     t0 = _t.time()
 
     # BTC/ETH 参照（顺逆大盘 / 大饼以太归属需要），失败不阻断
+    # v1.9.22 (D3)：参照币给**轻预算 3s**。它失败本就无关紧要（下面 except pass），
+    # 却会在早先实现里走满 10s deadline——本机币安网络层不稳时，两个参照币
+    # 就能吃掉 20s 全局预算，让真正的标的还没开始分析就超时。
     btc = eth = None
     for ref, name in (("btc", "BTCUSDT"), ("eth", "ETHUSDT")):
         try:
-            k, _ = load_or_fetch(name, "1d", args.limit, out_dir, args.refresh)
+            k, _ = load_or_fetch(name, "1d", args.limit, out_dir, args.refresh, budget=3.0)
             if ref == "btc":
                 btc = k
             else:
@@ -847,7 +879,23 @@ def main():
             pass
 
     rows = []
+    budget_exhausted = False
     for s in syms:
+        # v1.9.22 (D3)：全局取数预算。错误符号会跑满 5 host × 3 retry，
+        # 20 币曾耗 120 秒（会话 elapsed_ms=119636）。超预算后**停止后续取数**，
+        # 让剩下的币明确标记为"未分析"——不做静默跳过，否则用户会拿到
+        # 一个缺几个币却看起来完整的名单。
+        spent = _t.time() - t0
+        if spent > args.time_budget:
+            budget_exhausted = True
+            rows.append({
+                "symbol": s,
+                "verdict": {"rating": "未分析·超预算", "reason": f"已耗时 {spent:.0f}s 超过预算 {args.time_budget:.0f}s",
+                            "data_usable": False, "entry_now": False},
+                "errors": [{"stage": "budget",
+                            "error": f"全局取数预算 {args.time_budget:.0f}s 已耗尽，本标的未取数"}],
+            })
+            continue
         try:
             r, errs = analyze_one(s, args.interval, args.limit, out_dir, btc, eth, args.refresh)
             if r:
@@ -870,12 +918,35 @@ def main():
             })
     elapsed = int((_t.time() - t0) * 1000)
 
+    # ── v1.9.22 (D2)：真实成败判定 ────────────────────────────────────
+    # 早先无论取数成败都 print({"ok": True}) 并 return 0，调用方只看 exit code，
+    # 于是"20 币全部取数失败"在结构化返回值里表现为完全成功。现场代价：
+    # 主理人拿到 ok:true 却看到 digest 写着"取数失败"，被误导追加 6 次排障调用。
+    #
+    # 现在：ok = 没有任何一行是失败的。部分失败 ok 仍为 true（确有可用结果），
+    # 但 degraded=True + failed_symbols 列出失败项，调用方**必须**看得见。
+    BAD_RATINGS = ("取数失败", "数据不可用", "未分析·超预算")
+    failed_symbols = [r["symbol"] for r in rows
+                      if (r.get("verdict") or {}).get("rating") in BAD_RATINGS]
+    ok_count = len(rows) - len(failed_symbols)
+    all_failed = bool(rows) and ok_count == 0
+    degraded = bool(failed_symbols) and not all_failed
+
     payload = {
         "schema": "kexi.fast/1",
         "generated_at": datetime.now(TZ8).isoformat(),
         "elapsed_ms": elapsed,
         "count": len(rows),
         "rows": rows,
+        # 结构化成败：调用方不必解析人读 digest 才能判断发生了什么。
+        "ok": not all_failed,
+        "degraded": degraded,
+        "ok_count": ok_count,
+        "failed_count": len(failed_symbols),
+        "failed_symbols": failed_symbols,
+        "budget_exhausted": budget_exhausted,
+        "time_budget_sec": args.time_budget,
+        "symbol_notes": sym_notes,
     }
     out = args.out or os.path.join(out_dir, "fast_analysis.json")
     try:
@@ -892,8 +963,24 @@ def main():
         pass
 
     print(render_digest(rows, elapsed, payload))
-    print(json.dumps({"ok": True, "count": len(rows), "elapsed_ms": elapsed,
-                      "out": out, "md": md,
+
+    # 全部失败 → 非零退出码 + 结构化 error。这是"让缺陷第一时间暴露"的关键：
+    # 退出码 0 意味着"跑完了且结果可用"，不能拿来表示"跑完了但全炸了"。
+    if all_failed:
+        print(json.dumps({"ok": False,
+                          "error": f"全部 {len(rows)} 个标的取数失败：" + ", ".join(failed_symbols),
+                          "count": len(rows), "elapsed_ms": elapsed,
+                          "failed_symbols": failed_symbols,
+                          "budget_exhausted": budget_exhausted,
+                          "out": out, "md": md}, ensure_ascii=False))
+        return 3
+
+    print(json.dumps({"ok": True, "degraded": degraded,
+                      "count": len(rows), "ok_count": ok_count,
+                      "failed_count": len(failed_symbols),
+                      "failed_symbols": failed_symbols,
+                      "budget_exhausted": budget_exhausted,
+                      "elapsed_ms": elapsed, "out": out, "md": md,
                       "symbols": [r["symbol"] for r in rows]}, ensure_ascii=False))
     return 0
 

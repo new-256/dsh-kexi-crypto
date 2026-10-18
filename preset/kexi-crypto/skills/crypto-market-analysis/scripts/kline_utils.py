@@ -43,6 +43,114 @@ W1 = 7 * D1
 INTERVAL_MS = {"1m": M1, "5m": M5, "15m": M15, "1h": H1, "4h": H4, "1d": D1, "1w": W1}
 
 
+# 计价币，**最长优先**匹配（USDT 必须排在 USD 之前，否则 USDUSDT 会被切错）。
+QUOTE_ASSETS = ("USDT", "USDC", "BUSD", "FDUSD", "TUSD", "BTC", "ETH", "BNB", "USD")
+
+# 纯计价币：单独出现时只有"计价单位"含义、不可能是标的本身。
+# BTC/ETH/BNB 虽可作计价币（BTCUSDT 之外还有 ETHBTC），但它们本身是标的，
+# 所以**不在此列**——把 BTC 判成"计价币而非标的"就挡住了最常见的一次输入。
+PURE_QUOTES = ("USDT", "USDC", "BUSD", "FDUSD", "TUSD", "USD")
+
+# 合法基币：字母数字，1~15 位。用于拒绝明显非法的输入，而不是把它补成垃圾符号。
+import re as _re
+_BASE_RE = _re.compile(r"^[A-Z0-9]{1,15}$")
+_SEP_RE = _re.compile(r"[\s/\\_-]+")
+
+
+def normalize_symbol(raw):
+    """规范化交易对符号 —— 全包唯一真源（v1.9.22）。
+
+    现场取证（session-44da005c，2026-10-18）：
+      kexi_run(mode=fast) 传裸符号 "BTC"，三条下游取数路径同时失败：
+        CG_IDS.get("BTC")   → 无此键（键是 BTCUSDT）→ no CoinGecko id mapping
+        Binance ?symbol=BTC → HTTP 400
+        OKX instId=BTC      → 51001 Instrument ID does not exist
+      实测 fetch_binance('BTC') 9.38 秒失败 / ('BTCUSDT') 0.61 秒成功；
+      20 币 × ~6 秒 ≈ 120 秒，与会话 elapsed_ms=119636 精确吻合。
+      同一会话内模型自行改用 'BTCUSDT' 后立刻成功——用户被迫规避缺陷的证据。
+
+    设计约束（用户规则 1：禁降级兜底）：
+      只做**一次确定性改写**并**回显**改写结果。绝不"猜一个看起来对的然后
+      假装成功"——调用方必须看得见自己传的 BTC 变成了 BTCUSDT。
+
+    返回 dict：{symbol, base, quote, changed, input, note, error}
+      · 成功时 symbol 为非空字符串、error 为 None
+      · 失败时 symbol 为 None、error 说明原因
+    """
+    input_ = "" if raw is None else str(raw)
+    cleaned = _SEP_RE.sub("", input_.strip().upper())
+
+    base_ret = {"symbol": None, "base": None, "quote": None,
+                "changed": False, "input": input_, "note": None}
+
+    if not cleaned:
+        return dict(base_ret, error="符号为空")
+    if not cleaned.isalnum() or not cleaned.isascii():
+        return dict(base_ret, error="符号含非法字符：%s" % input_)
+
+    # ① 已带计价后缀 → 只校验，不改写
+    for q in QUOTE_ASSETS:
+        if len(cleaned) > len(q) and cleaned.endswith(q):
+            base = cleaned[: -len(q)]
+            if not _BASE_RE.match(base):
+                return dict(base_ret, error="符号基币部分非法：%s" % input_)
+            changed = cleaned != input_
+            return {"symbol": cleaned, "base": base, "quote": q,
+                    "changed": changed, "input": input_,
+                    "note": ("已规范化为 %s" % cleaned) if changed else None,
+                    "error": None}
+
+    # ①b 输入本身就是一个**纯计价币**（"USD"/"USDT"）→ 这是错误输入，不是缺后缀。
+    #     早先的实现会把它补成 USDUSDT 这种根本不存在的交易对，然后发请求、
+    #     白白等完 5 host × 3 retry。宁可立刻报错也不要制造垃圾符号。
+    #     注意：BTC/ETH/BNB 不在 PURE_QUOTES 里——它们本身是标的，
+    #     走 ② 分支补成 BTCUSDT 才是用户想要的结果。
+    if cleaned in PURE_QUOTES:
+        return dict(base_ret, error="%s 是计价币而非标的，请给出完整交易对（如 BTCUSDT）" % cleaned)
+
+    # ② 未带计价后缀 → 补 USDT，并**明确报告改写**
+    #    本函数不判断"这个币是否存在"——那是取数层的职责。这里只回答
+    #    "要发给交易所的符号应该长什么样"。
+    if not _BASE_RE.match(cleaned):
+        return dict(base_ret, error="符号基币部分非法：%s" % input_)
+    symbol = cleaned + "USDT"
+    return {"symbol": symbol, "base": cleaned, "quote": "USDT",
+            "changed": True, "input": input_,
+            "note": "未带计价后缀，已补为 %s（原输入 %s）" % (symbol, input_),
+            "error": None}
+
+
+def normalize_symbols(raw):
+    """批量规范化，保持顺序并去重。
+
+    raw 可以是 list，或逗号分隔的字符串（模型与用户都会顺手写 "A,B"）。
+    返回 dict：{symbols, notes, errors, changed}
+    """
+    if isinstance(raw, (list, tuple)):
+        items = list(raw)
+    elif raw is None:
+        items = []
+    else:
+        items = [raw]
+
+    symbols, notes, errors = [], [], []
+    for item in items:
+        for part in str("" if item is None else item).split(","):
+            t = part.strip()
+            if not t:
+                continue
+            r = normalize_symbol(t)
+            if r["error"]:
+                errors.append(r["error"])
+                continue
+            if r["note"]:
+                notes.append(r["note"])
+            if r["symbol"] not in symbols:
+                symbols.append(r["symbol"])
+    return {"symbols": symbols, "notes": notes, "errors": errors,
+            "changed": bool(notes)}
+
+
 def detect_step_ms(klines):
     """由时间戳中位差推断真实周期（毫秒）；样本不足返回 None。"""
     if not klines or len(klines) < 3:
