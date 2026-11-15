@@ -4,7 +4,7 @@
 > 门禁执行器另交叉校验 `f.m.suning.com`。`worldtimeapi.org` 本机 SSL 握手失败，未使用。
 > **数字与门禁原文以 `logs/build/gate-20261115-v1924.md` 为准**；门禁三件套（命令 / 输出摘要 / 日志路径）齐全项方计入 PASS；
 > 未执行 / 待复核项如实标注 UNVERIFIED，**不宣称超出证据范围的交付完成**。
-> 本轮不出 dist 包、**未做任何 git commit**（工作区保持可 review 状态）。
+> **更新（2026-11-15 17:29 北京时间，Lead 修订）**：GitHub 已推送（cedae59，见 §7）；npm 处于「暂存（staged）」状态、**未公开**，见 §7 与 §5 补充。
 
 **交付头信息**
 
@@ -156,12 +156,45 @@ loader 报 never started → 整个 `kexi-crypto` 预设被判 broken → 插件
 |---|---|---|
 | R1 | A3 真实验证缺口仍在（真实模型循环内委派未跑通） | 如实保留 UNVERIFIED；补测入口见 v1.9.23 门禁报告 §4 |
 | R2 | GUI「加载失败」是否真消失未经界面验证 | 需用户重启 DSH 后按 §5 清单确认；门禁只证明引导挂载链路 clean |
-| R3 | 工作区 diff 指纹含 v1.9.23 WIP + v1.9.24 修复两部分（HEAD 仍 07cd884） | 冻结以磁盘字节为准；git 未 commit（纪律）；用户 review 后再决定提交 |
+| R3 | 工作区 diff 指纹含 v1.9.23 WIP + v1.9.24 修复两部分（HEAD 仍 07cd884） | 冻结以磁盘字节为准；**已于 2026-11-15 17:26 北京时间 commit `cedae59` 并推送 origin/main（见 §7）**；此前"未 commit"表述作废 |
 | R4 | `cordis.patch.yml` 中仍有 2 处说明性注释提及 `tool-subagent-list-agents`（562/567 行，`#` 注释，记录删除原因） | 非 ACTIVE 声明行；权威判据为 check-preset-mount 挂载树 0 命中（已 PASS） |
 | R5 | `test-scripts-smoke.py` 2 项 INFO（backtest.py / new_listing.py 无参挂起 >25s） | 未验证项，如实保留 |
 | R6 | `check-preset-mount` 依赖宿主后端可用 | 本轮 exit 0；若未来不可用，按 SKIP 显式打印，不计入 PASS |
 | R7 | 全量回归 verify 步骤自动清理 `__pycache__`（pruned） | verify.mjs 既有行为，未改变追踪文件指纹（前后 `e6c6bd05…` 一致）；如需零副作用请告知维护者 |
 | R8 | **安装副本死文件 `kexi-member-presets.yml` 再现**：v1.9.23 删除并复证 0 多余后再次出现（mtime 2026-10-18、sha256 275C… 与 v1.9.23 留证逐字节一致） | 本次已再留证（`logs/build/removed-installed-kexi-member-presets-v1924.yml`）后删除并 CheckOnly 复证 0 多余。**根因未完全查明**：疑似 DSH 0.2.2-rc.3 升级（2026-11-13）或插件管理器按缓存重解压所致；若 DSH 后续再重装插件，死文件可能再次出现，重启后若插件管理页仍异常需排查缓存污染 |
+
+---
+
+## 7. 出厂包与 GitHub / npm 发布记录（2026-11-15 17:29 北京时间补记）
+
+**出厂安装包**
+
+| 项 | 值 |
+|---|---|
+| 绝对路径 | `C:\Users\lcl\Desktop\DSH插件开发\K析研判团\dist\dsh-kexi-crypto-1.9.24.tgz` |
+| 文件名 | `dsh-kexi-crypto-1.9.24.tgz` |
+| 字节数 | 1 068 871 |
+| SHA-256 | `78D059854C4A52CDD0EB4F521180E41CF3F9BFAB31DC33DC714B5D7F4F751CCB` |
+| 条目数 | 168 |
+| runId / 冻结号 | `RUN-20261115-V1924` / `FREEZE-20261115-V1924` |
+| 标准安装验证 | 临时目录 `npm install <tgz>`（非 npm link / 非 file: 引用）成功：version=1.9.24、6 个关键入口 `node --check` 全过、exports 解析一致（2026-11-15） |
+
+**GitHub**
+
+- 仓库 `new-256/dsh-kexi-crypto`（public），commit `cedae59aa2d834e38e2ce505ad0931e375d06c80` 已推送至 `main`（ls-remote 复核一致）。
+- 提交信息如实注明：本提交同时承载 v1.9.23 未提交工作与 v1.9.24 修复。
+
+**npm（重要更正：插件报告 ≠ 实际公开）**
+
+- `dsh-kexi-crypto` 在 npm 上的最近公开版本仍为 **1.9.17**（`registry.npmjs.org` 实测，2026-11-15）；`latest` 指向 1.9.17。
+- 仓库推送权限插件（`repo_push_access`）对 `dsh-kexi-crypto` 报告「发布鉴权通过」并返回 `npm.published: true`；其后
+  注册表 404、`npm publish` 直接报 `E409 Cannot publish over previously staged version "1.9.24"`。
+  即：插件执行的是 npm 的**暂存发布（stage publish）**，1.9.24 处于「待 2FA/人工确认」的暂存状态，**尚未对外可见**。
+- `npm --userconfig %USERPROFILE%\.npmrc stage list` 返回空（暂存归属插件自己的 token 创建，本机 token 侧不可见），
+  `stage-id` 无法获取，`stage approve` 需要暂存创建方的 proof-of-presence（2FA/OTP），**本机无法代为完成**。
+- 待办（用户）：登录 npm 网页 `https://www.npmjs.com/package/dsh-kexi-crypto` → Packages / Staged 处批准暂存的
+  1.9.24；或用暂存创建方的账号/CLI 执行 `npm stage approve <stage-id>`。
+- 结论：**GitHub 已同步；npm 为「已暂存、未公开」**。不得按"npm 已发布 1.9.24"对外宣称。
 
 ---
 
