@@ -1,0 +1,12 @@
+源: C:\Users\lcl\Desktop\DSH插件开发\K析研判团
+目: C:\Users\lcl\AppData\Roaming\DSH Desktop\dsh-home\profiles\web\node_modules\dsh-kexi-crypto
+仅校验，不复制。
+
+校验：检查 154 个文件，差异 6，多余 0
+缺失于安装副本:
+  - home-plugin\dsh-kexi-crypto\lib\members.mjs
+  - home-plugin\dsh-kexi-crypto\lib\preset-roster.mjs
+  - docs\team\collaboration.md
+  - docs\team\progress.md
+  - docs\team\update-01.md
+  - scripts\_probe-roster-wrap.mjs

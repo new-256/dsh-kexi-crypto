@@ -230,12 +230,15 @@ window.__ModuleLoader__.load({
     }
 
     // ── 团队名册（v1.5.9 起六人团队：主理人 + 五位成员，证伪为红队） ─────────
+    // v1.9.23：委派工具收敛为 1 个 `subagent`，工具名不再是身份信号——名册改用
+    // **preset id** 作匹配键（与 host 的 lib/members.mjs 唯一真源一一对应，
+    // verify.mjs 断言两侧集合相等）。host 节点会带 member/agentPreset 字段。
     const TEAM = [
-      { key: "shuma", cn: "数脉", tool: "market_data_specialist", role: "行情取数 · 数据质检" },
-      { key: "zhibei", cn: "指北", tool: "technical_indicators", role: "指标计算 · 形态量价" },
-      { key: "wangchao", cn: "望潮", tool: "trend_forecaster", role: "三情景概率 · 证伪条件" },
-      { key: "shouzhuo", cn: "守拙", tool: "risk_assessor", role: "风险定级 · 可执行提示" },
-      { key: "zhengfu", cn: "证伪", tool: "falsification_challenger", role: "唱反调 · 攻击结论前提", red: true }
+      { key: "shuma", cn: "数脉", preset: "kexi-member-market-data", role: "行情取数 · 数据质检" },
+      { key: "zhibei", cn: "指北", preset: "kexi-member-technical", role: "指标计算 · 形态量价" },
+      { key: "wangchao", cn: "望潮", preset: "kexi-member-forecaster", role: "三情景概率 · 证伪条件" },
+      { key: "shouzhuo", cn: "守拙", preset: "kexi-member-risk", role: "风险定级 · 可执行提示" },
+      { key: "zhengfu", cn: "证伪", preset: "kexi-member-falsifier", role: "唱反调 · 攻击结论前提", red: true }
     ];
 
     /** 本地 CLI 元数据（仅用于把启用的 CLI 作为团队成员展示）。 */
@@ -260,8 +263,8 @@ window.__ModuleLoader__.load({
         // ② 节点标签兜底（subagent/团队消息节点）
         if (!s.busy) return;
         (s.nodes || []).forEach(function (n) {
-          const lab = String(n.label || "") + " " + String(n.tool || "") + " " + String(n.member || "");
-          TEAM.forEach(function (m) { if (lab.indexOf(m.cn) >= 0 || lab.indexOf(m.tool) >= 0 || lab.indexOf(m.key) >= 0) set[m.key] = m; });
+          const lab = String(n.label || "") + " " + String(n.tool || "") + " " + String(n.member || "") + " " + String(n.agentPreset || "");
+          TEAM.forEach(function (m) { if (lab.indexOf(m.cn) >= 0 || lab.indexOf(m.preset) >= 0 || lab.indexOf(m.key) >= 0) set[m.key] = m; });
           // CLI 节点工具形如 agy_run / codebuddy_run / mimo_run
           CLI_TEAM.forEach(function (c) { if (new RegExp("(^|\\b)" + c.key + "_").test(String(n.tool || ""))) set[c.key] = c; });
         });
@@ -448,7 +451,7 @@ window.__ModuleLoader__.load({
         return react.createElement("div", {
             key: m.key,
             className: "kexi-member" + (on ? " kexi-member-on" : "") + (external ? " kexi-member-cli" : ""),
-            title: m.tool || m.role
+            title: m.role
           },
           react.createElement("div", { className: "kexi-member-head" },
             react.createElement("span", { className: "kexi-member-ava" }, external ? "🤖" : m.cn.slice(0, 1)),

@@ -16,30 +16,30 @@ description: K析研判团主理人编排手册。指导主理人调度数脉、
 ### Workflow A：单币种完整走势研判
 - **触发条件**：用户请求“分析 BTC/ETH 走势”、“帮我看看 XX 币”等综合研判需求。
 - **步骤序列**：
-  1. 数脉 (`market_data_specialist` / `fetch_klines.py`)：拉取 120 根已收盘日线与快照并质检，落盘 `kexi_out/{symbol}_1d.json`。
-  2. 指北 (`technical_indicators` / `indicators.py`)：输入行情文件，计算均线/MACD/RSI/量比/关键位，落盘 `kexi_out/{symbol}_ind.json`。
-  3. 望潮 (`trend_forecaster`)：输入指标文件，判定趋势方向、强度与基准/乐观/悲观三情景概率及证伪防线。
-  4. 守拙 (`risk_assessor`)：评估波动率与回撤，核定风险等级（低/中/高/极高），输出 3~6 条风险警示与合规免责。
+  1. 数脉 (`agent_preset=kexi-member-market-data` / `fetch_klines.py`)：拉取 120 根已收盘日线与快照并质检，落盘 `kexi_out/{symbol}_1d.json`。
+  2. 指北 (`agent_preset=kexi-member-technical` / `indicators.py`)：输入行情文件，计算均线/MACD/RSI/量比/关键位，落盘 `kexi_out/{symbol}_ind.json`。
+  3. 望潮 (`agent_preset=kexi-member-forecaster`)：输入指标文件，判定趋势方向、强度与基准/乐观/悲观三情景概率及证伪防线。
+  4. 守拙 (`agent_preset=kexi-member-risk`)：评估波动率与回撤，核定风险等级（低/中/高/极高），输出 3~6 条风险警示与合规免责。
   5. K析 (主理人)：组装 `report.json` → `validate_report.py --fix` → `dashboard.py` 渲染离线看板。
 - **交付物**：`report.json` + `report.html` 离线看板卡片 + 五段式 Markdown 报告。
 
 ### Workflow B：多币种对比分析
 - **触发条件**：用户请求“对比 BTC 和 ETH”、“多币横向对比”、“哪个更值得关注”。
 - **步骤序列**：
-  1. 数脉 (`market_data_specialist`)：并发拉取各标的已收盘日线，统一落盘至 `kexi_out/`。
-  2. 指北 (`technical_indicators`)：并行计算各标的技术指标与关键支撑阻力位。
+  1. 数脉 (`agent_preset=kexi-member-market-data`)：并发拉取各标的已收盘日线，统一落盘至 `kexi_out/`。
+  2. 指北 (`agent_preset=kexi-member-technical`)：并行计算各标的技术指标与关键支撑阻力位。
   3. 组合分析 (`portfolio.py`)：计算标的间相关性矩阵（检测假分散风险）与 ATR 等风险仓位预算。
-  4. 望潮 (`trend_forecaster`)：横向对比各标的强弱位阶、形态共振与走势胜率。
-  5. 守拙 (`risk_assessor`)：评估资产间单边共振风险，核定各标的相对风险评级。
+  4. 望潮 (`agent_preset=kexi-member-forecaster`)：横向对比各标的强弱位阶、形态共振与走势胜率。
+  5. 守拙 (`agent_preset=kexi-member-risk`)：评估资产间单边共振风险，核定各标的相对风险评级。
   6. K析 (主理人)：汇编多币对比矩阵表与组合画像看板卡片。
 - **交付物**：多币对比报告 + 组合量化画像/相关性热力图卡片。
 
 ### Workflow C：紧急复核（数据异常/极端行情应急）
 - **触发条件**：数据源接口报错、停更报警（last_bar_age_days > 3）、盘中单日振幅 ≥ 10% 极端异动。
 - **步骤序列**：
-  1. 数脉 (`market_data_specialist`)：触发重试与跨源切换（Binance ↔ CoinGecko），复核异常跳变 bar。
-  2. 守拙 (`risk_assessor`)：若数据确认不可用，立即阻断分析并出具数据缺失风险警示；若为极端波动则评估指标失效度。
-  3. 指北 (`technical_indicators`)：在降级可用时标注真实周期（如 4d）与计算置信度折损说明。
+  1. 数脉 (`agent_preset=kexi-member-market-data`)：触发重试与跨源切换（Binance ↔ CoinGecko），复核异常跳变 bar。
+  2. 守拙 (`agent_preset=kexi-member-risk`)：若数据确认不可用，立即阻断分析并出具数据缺失风险警示；若为极端波动则评估指标失效度。
+  3. 指北 (`agent_preset=kexi-member-technical`)：在降级可用时标注真实周期（如 4d）与计算置信度折损说明。
   4. K析 (主理人)：向用户如实通报数据源状态或波动警示，不盲目推演。
 - **交付物**：应急复核告警说明 + 降级快报。
 
@@ -51,10 +51,10 @@ description: K析研判团主理人编排手册。指导主理人调度数脉、
   并加载了 skill，代价是先走了 8 次单干排障才回到正轨。）
 - **步骤序列**：
   1. 数脉/工具 (`screener.py`)：Top100 + 放量币技术初筛、ADV20 流动性闸门（≥3M USD）与 BTC 大盘闸门，产出 `scan_result.json`。
-  2. 指北 (`technical_indicators`)：抽查前 15 名候选标的，复核 4h 级别技术共振与突破信号真伪。
+  2. 指北 (`agent_preset=kexi-member-technical`)：抽查前 15 名候选标的，复核 4h 级别技术共振与突破信号真伪。
   3. 数脉/工具 (`enrich_picks.py`)：追加入选标的 TP1/TP2/止损价位、资金费率、流通比与恐慌贪婪情绪闸门。
-  4. 望潮 (`trend_forecaster`)：收敛确认最终 10 标的，检索赛道催化剂并解读资金轮动方向。
-  5. 守拙 (`risk_assessor`)：核定各入选标的风险等级与大盘环境置信度。
+  4. 望潮 (`agent_preset=kexi-member-forecaster`)：收敛确认最终 10 标的，检索赛道催化剂并解读资金轮动方向。
+  5. 守拙 (`agent_preset=kexi-member-risk`)：核定各入选标的风险等级与大盘环境置信度。
   6. K析 (主理人)：汇编最终优选名单与“补涨观察名单”（标注触发条件与非立即入场说明）。
 - **交付物**：`scan_report.md` + 筛选结果卡片。
 
@@ -63,8 +63,8 @@ description: K析研判团主理人编排手册。指导主理人调度数脉、
 - **步骤序列**：
   1. 数脉/工具 (`new_listing.py`)：扫描上市 ≤30 天新币，抓取大单流向与持币集中度，计算鲸鱼行为分。
   2. 数脉/工具 (`listing_effect.py`)：分析跨所上币走势（D1/D7/D30）、首发池与交易所风评画像（`--reputation`）。
-  3. 望潮 (`trend_forecaster`)：核对“第二波企稳条件”（开盘 24~72h 缩量企稳 + 鲸鱼增持），未达标坚决不开仓。
-  4. 守拙 (`risk_assessor`)：核定打新风险等级（默认不低于“高”，破发/集中度高直接判定“极高”），施加开仓纪律。
+  3. 望潮 (`agent_preset=kexi-member-forecaster`)：核对“第二波企稳条件”（开盘 24~72h 缩量企稳 + 鲸鱼增持），未达标坚决不开仓。
+  4. 守拙 (`agent_preset=kexi-member-risk`)：核定打新风险等级（默认不低于“高”，破发/集中度高直接判定“极高”），施加开仓纪律。
   5. K析 (主理人)：输出新币打新评估报告，强调换手铁律（首日不开仓、仓位 ≤10%、72h 时间止损与 -8% 价格止损）。
 - **交付物**：新币打新评估报告 + 上币效应分析卡片。
 
@@ -72,7 +72,7 @@ description: K析研判团主理人编排手册。指导主理人调度数脉、
 - **触发条件**：研判/选币任务完成后归档、用户咨询“复盘历史预测”、“战绩报告”、“建档存盘”。
 - **步骤序列**：
   1. 守拙/工具 (`track_report.py`)：归集 `track-record/ledger.jsonl` 台账、回测证据与研判计划。
-  2. 守拙 (`risk_assessor`)：评估前期预测胜率、各维度中位数超额收益（vs BTC）与过度规避成本。
+  2. 守拙 (`agent_preset=kexi-member-risk`)：评估前期预测胜率、各维度中位数超额收益（vs BTC）与过度规避成本。
   3. K析 (主理人)：调用 `track_report.py` 生成单文件自包含 HTML 可视化战绩报告（含判断点时间轴、三法交叉止盈止损、底仓分批策略），用 present 交付。
 - **交付物**：`track_report.html` 可视化战绩卡片 + 经验迭代纪要。
 
@@ -116,7 +116,7 @@ description: K析研判团主理人编排手册。指导主理人调度数脉、
   2. 指北 (`coin_profile.py --klines ... --btc-klines ... --eth-klines ...`)：拉盘/出货模式 + 顺/逆大盘 + 走大饼还是以太 + BTC-ETH 比价风格。
   3. 望潮：按画像修正情景权重（快速拉盘震荡出货币反弹目标给低、趋势币回调目标给深、走以太币叠加 ETH/BTC 方向）。
   4. 守拙：入场环境风控复核（追高拦截/抄底减半/突破验证）。
-  5. **证伪（`falsification_challenger`）**：攻击上面三步的**前提**（见 Workflow M）。
+  5. **证伪（`agent_preset=kexi-member-falsifier`）**：攻击上面三步的**前提**（见 Workflow M）。
 - **交付物**：entry_plan.json + coin_profile.json 并入最终评估。
 
 ### Workflow L：多标的批量复核（v1.5.2 新增，A/B/D 涉及多标的时强制）
@@ -171,9 +171,9 @@ description: K析研判团主理人编排手册。指导主理人调度数脉、
 - **步骤序列**：
   1. 工具 (`position_doctor.py`)：真实持仓 × 市场状态出调仓意见（七条规则）；
      自主级别只决定是否附订单草案，**模块从不下单**。
-  2. 指北 (`technical_indicators`)：对**持仓内**每个标的做技术面复检
+  2. 指北 (`agent_preset=kexi-member-technical`)：对**持仓内**每个标的做技术面复检
      （位置分位、多周期方向、是否已破结构位）。
-  3. 守拙 (`risk_assessor`)：按当前大盘环境核定风险等级与减仓优先级，
+  3. 守拙 (`agent_preset=kexi-member-risk`)：按当前大盘环境核定风险等级与减仓优先级，
      给出**可执行止损位**（结构位不可当止损用时须明确指出）。
   4. K析 (主理人)：汇编「留 / 减 / 清」三档意见 + 每档触发条件。
 - **不需要派活的情形**：用户只问"我这几个币现在什么价"这类纯查询，

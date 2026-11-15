@@ -1,0 +1,80 @@
+
+── 负对照 1：改造前 + 真实 451/403/SSL 异常串 ─────────────────
+INFO  无参裸跑联网、当前网络快速失败的脚本: netssl.py
+        根异常为标准库网络层错误（非代码堆栈）；流水线从不裸调它们。
+  FAIL  ③ 缺参数时是干净的 argparse 报错，不是 Python 堆栈   堆栈崩溃: ['net403.py → RuntimeError: /api/v3/ticker/24hr failed after 2 retries: HTTP Error 403: Forbidden', 'net451.py → RuntimeError: HTTP Error 451:']
+test-scripts-smoke: 10/11 通过
+
+── 负对照 2：改造后 + 同一批异常串 ─────────────────────────────
+SKIP  受限网络 → net403.py（HTTP 403）
+  SKIP  受限网络 → net451.py（HTTP 451）
+  SKIP  受限网络 → netssl.py（urlopen error）
+  SKIP  受限网络（裸跑联网 + 当前网络受限，非代码堆栈）: net403.py → HTTP 403, net451.py → HTTP 451, netssl.py → urlopen error
+        流水线从不裸调它们；SKIP 计入下方汇总并受 ⑦⑧ 阈值约束。
+test-scripts-smoke: 13/13 通过, 3 项 SKIP（受限网络：net403.py → HTTP 403, net451.py → HTTP 451, netssl.py → urlopen error）
+────────────────────────────────────────────────────────────────────────
+  ✓  改造前：451/403/SSL 被判成"堆栈崩溃"→ 整步 FAIL（复现体检的红）
+  ✓  改造后：同样输入 → exit 0，且 451/403/SSL 逐条显式 SKIP 并打印状态码
+  ✓  改造后：汇总行含 SKIP 明细（禁止静默跳过）
+
+── 负对照 3：注入真业务异常（TypeError/KeyError/带网络字样的 TypeError）──
+SKIP  受限网络 → net403.py（HTTP 403）
+  SKIP  受限网络 → net451.py（HTTP 451）
+  SKIP  受限网络 → netssl.py（urlopen error）
+  SKIP  受限网络（裸跑联网 + 当前网络受限，非代码堆栈）: net403.py → HTTP 403, net451.py → HTTP 451, netssl.py → urlopen error
+        流水线从不裸调它们；SKIP 计入下方汇总并受 ⑦⑧ 阈值约束。
+  FAIL  ③ 缺参数时是干净的 argparse 报错，不是 Python 堆栈   堆栈崩溃: ["biz_key.py → KeyError: 'data'", 'biz_noisy.py → TypeError: HTTP Error 451: 接口返回体缺少 data 字段，不能直接下标取值', "biz_type.py → TypeError: unsupported operand type(s) for +: 'NoneType' and 'int'"]
+test-scripts-smoke: 12/13 通过, 3 项 SKIP（受限网络：net403.py → HTTP 403, net451.py → HTTP 451, netssl.py → urlopen error）
+────────────────────────────────────────────────────────────────────────
+  ✓  改造后：TypeError / KeyError / "TypeError 内含 HTTP 451" 全部仍 FAIL
+
+── 负对照 4：10/13 脚本 SKIP（未验证率 > 20% 阈值）──────────────
+SKIP  受限网络 → net00.py（HTTP 451）
+  SKIP  受限网络 → net01.py（HTTP 451）
+  SKIP  受限网络 → net02.py（HTTP 451）
+  SKIP  受限网络 → net03.py（HTTP 451）
+  SKIP  受限网络 → net04.py（HTTP 451）
+  SKIP  受限网络 → net05.py（HTTP 451）
+  SKIP  受限网络 → net06.py（HTTP 451）
+  SKIP  受限网络 → net07.py（HTTP 451）
+  SKIP  受限网络 → net08.py（HTTP 451）
+  SKIP  受限网络 → net09.py（HTTP 451）
+  SKIP  受限网络（裸跑联网 + 当前网络受限，非代码堆栈）: net00.py → HTTP 451, net01.py → HTTP 451, net02.py → HTTP 451, net03.py → HTTP 451, net04.py → HTTP 451, net05.py → HTTP 451, net06.py → HTTP 451, net07.py → HTTP 451, net08.py → HTTP 451, net09.py → HTTP 451
+        流水线从不裸调它们；SKIP 计入下方汇总并受 ⑦⑧ 阈值约束。
+  FAIL  ⑦ 未验证率（SKIP+挂起）≤ 20%（SKIP/挂起不得退化成永远绿）   未验证 10/35 = 28.6%（阈值 20%）: SKIP=[net00.py → HTTP 451, net01.py → HTTP 451, net02.py → HTTP 451, net03.py → HTTP 451, net04.py → HTTP 451, net05.py → HTTP 451, net06.py → HTTP 451, net07.py → HTTP 451, net08.py → HTTP 451, net09.py → HTTP 451] 挂起=[无]
+test-scripts-smoke: 12/13 通过, 10 项 SKIP（受限网络：net00.py → HTTP 451, net01.py → HTTP 451, net02.py → HTTP 451, net03.py → HTTP 451, net04.py → HTTP 451, net05.py → HTTP 451, net06.py → HTTP 451, net07.py → HTTP 451, net08.py → HTTP 451, net09.py → HTTP 451）
+────────────────────────────────────────────────────────────────────────
+  ✓  改造后：未验证率 10/35 = 28.6% > 20% → ⑦ 判 FAIL、整步 exit 1
+
+── 负对照 5：同一脚本连续 SKIP（第 1/2/3/4 次退出码 [0, 0, 1]）──────────
+SKIP  受限网络 → net403.py（HTTP 403）
+  SKIP  受限网络 → net451.py（HTTP 451）
+  SKIP  受限网络 → netssl.py（urlopen error）
+  SKIP  受限网络（裸跑联网 + 当前网络受限，非代码堆栈）: net403.py → HTTP 403, net451.py → HTTP 451, netssl.py → urlopen error
+        流水线从不裸调它们；SKIP 计入下方汇总并受 ⑦⑧ 阈值约束。
+  FAIL  ⑧ 没有脚本连续 3 次运行都 SKIP   连续 SKIP 计数: net403.py×4, net451.py×4, netssl.py×4（记录文件 C:\Users\lcl\AppData\Local\Temp\kexi-p11-nc-9_pu_ixi\streak-5.json）
+test-scripts-smoke: 12/13 通过, 3 项 SKIP（受限网络：net403.py → HTTP 403, net451.py → HTTP 451, netssl.py → urlopen error）
+────────────────────────────────────────────────────────────────────────
+  ✓  改造后：连续 3 次 SKIP 起 → ⑧ 判 FAIL（第 3、4 次退出码为 1）
+
+── 负对照 6：连续计数文件损坏 ─────────────────────────────────
+SKIP  受限网络 → net403.py（HTTP 403）
+  SKIP  受限网络 → net451.py（HTTP 451）
+  SKIP  受限网络 → netssl.py（urlopen error）
+  SKIP  受限网络（裸跑联网 + 当前网络受限，非代码堆栈）: net403.py → HTTP 403, net451.py → HTTP 451, netssl.py → urlopen error
+        流水线从不裸调它们；SKIP 计入下方汇总并受 ⑦⑧ 阈值约束。
+  FAIL  ⑧ 没有脚本连续 3 次运行都 SKIP   连续 SKIP 计数不可用（禁止静默放弃该保护）: C:\Users\lcl\AppData\Local\Temp\kexi-p11-nc-9_pu_ixi\streak-broken.json（Expecting property name enclosed in double quotes: line 1 column 3 (char 2)）
+test-scripts-smoke: 12/13 通过, 3 项 SKIP（受限网络：net403.py → HTTP 403, net451.py → HTTP 451, netssl.py → urlopen error）
+────────────────────────────────────────────────────────────────────────
+  ✓  改造后：计数文件损坏 → ⑧ 判 FAIL 并打印原因（不静默放弃保护）
+
+========================================================================
+P1-1 负对照：7/7 符合预期
+========================================================================
+  ✓ 改造前：451/403/SSL 被判成"堆栈崩溃"→ 整步 FAIL（复现体检的红）
+  ✓ 改造后：同样输入 → exit 0，且 451/403/SSL 逐条显式 SKIP 并打印状态码
+  ✓ 改造后：汇总行含 SKIP 明细（禁止静默跳过）
+  ✓ 改造后：TypeError / KeyError / "TypeError 内含 HTTP 451" 全部仍 FAIL
+  ✓ 改造后：未验证率 10/35 = 28.6% > 20% → ⑦ 判 FAIL、整步 exit 1
+  ✓ 改造后：连续 3 次 SKIP 起 → ⑧ 判 FAIL（第 3、4 次退出码为 1）
+  ✓ 改造后：计数文件损坏 → ⑧ 判 FAIL 并打印原因（不静默放弃保护）

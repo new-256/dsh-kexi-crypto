@@ -1,0 +1,24 @@
+members 真值: 委派 数脉·取数质检 | 委派 指北·技术指标 | 委派 望潮·趋势推演 | 委派 守拙·风险定级 | 委派 证伪·红队证伪
+
+[a] tool/call 正常成员委派（JSON 字符串 args）
+  ✓ label === '委派 指北·技术指标'
+  ✓ 节点 agentPreset === 'kexi-member-technical'
+  ✓ 节点 member === 'zhibei'
+[b] tool/call 坏 JSON args
+  ✓ label 含 '参数解析失败'
+  ✓ label 不等于任何成员标签、也不等于「委派成员」
+  ✓ detail === 原始 args 前 80 字符
+[c] tool/call 缺 agent_preset
+  ✓ label 含 '继承主理人预设'
+  ✓ label 不等于任何成员标签、也不等于「委派成员」
+[d] tool/call 未知 preset id
+  ✓ label 含 '未知预设'
+  ✓ detail 回显未知 id 原文 'kexi-member-renamed'
+  ✓ label 不等于任何成员标签、也不等于「委派成员」
+[e] 事件路径 subagent/start
+  ✓ 父会话桶里出现 subagent 节点
+  ✓ label === '委派成员 指北·技术指标'（前缀是「委派成员 」，与 a 的「委派 」不同）
+  ✓ 节点 agentPreset === 'kexi-member-technical'
+
+通过 14 / 失败 0
+ASSERT-LABEL: PASS

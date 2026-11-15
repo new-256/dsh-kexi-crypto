@@ -1,0 +1,33 @@
+
+Rel                                                                         Status SrcLen DstLen
+---                                                                         ------ ------ ------
+docs\build-logs\hw-monitor-20261018-0208.csv                                DIFF      623    650
+docs\build-logs\hw-monitor-20261018-0232.csv                                DIFF      499    521
+docs\build-logs\test-20261018-0208.log                                      DIFF     7025   7132
+docs\build-logs\test-20261018-0232.log                                      DIFF     7012   7119
+docs\evidence\backend-misplaced-kexi_out\ALGOUSDT_1d_dashboard.html         DIFF    72346  73547
+docs\evidence\backend-misplaced-kexi_out\ALGOUSDT_1d_indicators.json        DIFF     7625   7999
+docs\evidence\backend-misplaced-kexi_out\ALGOUSDT_1d_klines.json            DIFF    23985  25756
+locale\en.json                                                              DIFF      840    841
+locale\zh.json                                                              DIFF      695    696
+preset\kexi-crypto\kexi-plugin.mjs                                          DIFF   127077 128967
+preset\kexi-crypto\skills\crypto-market-analysis\scripts\cex_adapter.py     DIFF    79272  80874
+preset\kexi-crypto\skills\crypto-market-analysis\scripts\fast_analysis.py   DIFF    52951  53940
+preset\kexi-crypto\skills\crypto-market-analysis\scripts\fetch_klines.py    DIFF    27438  27984
+preset\kexi-crypto\skills\crypto-market-analysis\scripts\position_doctor.py DIFF    36281  37036
+preset\kexi-crypto\skills\crypto-market-analysis\tests\sample_report.json   DIFF    28362  30115
+scripts\_track-session.mjs                                                  DIFF     6900   7057
+scripts\run-all-tests.ps1                                                   DIFF     6444   6541
+scripts\sync-install.ps1                                                    DIFF     6991   7144
+scripts\test-cex-credential-schema.py                                       DIFF     9789   9955
+scripts\test-settings-wiring.py                                             DIFF    28070  28504
+track-record\evidence\bt.json                                               DIFF    10584  11096
+track-record\evidence\bt.md                                                 DIFF     2742   2796
+track-record\evidence\btB.json                                              DIFF     7427   7789
+track-record\evidence\btB.md                                                DIFF     3062   3122
+track-record\ledger.jsonl                                                   DIFF    14543  14574
+track-record\report.html                                                    DIFF   127352 127387
+track-record\score\score-20260928.json                                      DIFF    22406  23489
+track-record\score\scoreboard.md                                            DIFF     5141   5208
+
+

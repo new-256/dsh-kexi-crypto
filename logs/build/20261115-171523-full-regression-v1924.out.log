@@ -1,0 +1,116 @@
+硬件监控已启动 → C:\Users\lcl\AppData\Local\Temp\kexi-hw\hw-20261115-171523.csv
+仓库: C:\Users\lcl\Desktop\DSH插件开发\K析研判团
+Python: C:\Python313\python.exe  (-Quick: False)
+
+=== verify.mjs (静态接线 + 语法) ===
+  PASS    ✓ pruned preset\kexi-crypto\skills\crypto-market-analysis\scripts\__pycache__ |  | verify: PASS (12 顶层键 / 631 行 patch)
+
+=== test-preset-contract.mjs (0.2.1 预设契约/真实 subagent schema) ===
+  PASS    ✓ kexi-member-falsifier 挂有 kexi-plugin（成员分析手段） |  | PRESET-CONTRACT: PASS
+
+=== test-preset-roster.mjs (内部成员预设隐藏/GUI roster) ===
+  PASS    ✓ dispose 后可重新安装（标记已清，不会假报重复） |  | PRESET-ROSTER: PASS
+
+=== test-runtime.mjs (行为回归) ===
+  PASS  ============================================================ | RUNTIME: ALL PASS  (178 通过 / 0 失败) | ============================================================
+
+=== test-v1922-fixes.mjs (v1.9.22 修复回归 104 项) ===
+  PASS   | ──────────────────────────────────────────────────────────── | v1.9.22 回归：PASS（104 项）
+
+=== test-card-props.mjs (卡片传值) ===
+  PASS    ✓ 传元组 → sessions 为空（这就是原 bug） |  | ✅ 卡片传值回归通过
+
+=== test-card-kexi-filter.py (卡片只显 kexi 相关) ===
+  PASS  test-card-kexi-filter: 38/38 通过
+
+=== test-team-graph.py (团队关系图) ===
+  PASS  test-team-graph: 49/49 通过
+
+=== test-graph-render-rules.py (图渲染规则) ===
+  PASS  test-graph-render-rules: 16/16 通过
+
+=== test-session-findings.py (实跑取证回归) ===
+  PASS  test-session-findings: 21/21 通过
+
+=== test-regime.py (市场状态判定) ===
+  PASS  test-regime: 54/54 通过
+
+=== test-regime-log.py (regime 对账台账) ===
+  PASS  test-regime-log: 25/25 通过
+
+=== test-cex-credential-schema.py (CEX 凭据字段一致性) ===
+  PASS  test-cex-credential-schema: 31/31 通过
+
+=== test-position-doctor.py (仓位体检) ===
+  PASS  test-position-doctor: 56/56 通过
+
+=== test-dpapi-roundtrip.mjs (DPAPI 凭据往返实测) ===
+  PASS  test-dpapi-roundtrip: 28/28 通过
+
+=== test-settings-wiring.py (设置连通性) ===
+  PASS  test-settings-wiring: 108/108 通过
+
+=== test-scripts-smoke.py (全脚本冒烟) ===
+  PASS    INFO  无参运行会挂起(>25s)的脚本: backtest.py, new_listing.py |         流水线从不裸调它们，但模型漏参时会多烧一次超时。 | test-scripts-smoke: 13/13 通过, 2 项 INFO 无参挂起（未验证：backtest.py, new_listing.py）
+
+=== test-frontend-backend-parity.mjs (前后端字段匹配) ===
+  PASS  test-frontend-backend-parity: 21/21 通过（仅静态比对（host 未运行））
+
+=== test-cex-tool-serialization.mjs (工具返回值序列化) ===
+  PASS  test-cex-tool-serialization: 12/12 通过
+
+=== 成果登记运行期探针 ===
+  PASS    version = 1.9.24 |  | test-artifact-runtime: 6 通过 / 0 失败
+
+=== test-runtime-bugs.mjs (现场取证 bug) ===
+  PASS    ✓ 旧式 pipeline:true + symbol 不被劫持成 fast |  | ✅ v1.5.4 现场取证回归通过
+
+=== test-hooks-order.mjs (React Hooks 顺序) ===
+  PASS    ✓ 早退前已声明全部 9 个 hook |  | ✅ Hooks 顺序回归通过
+
+=== test-settings-seat.cjs (设置卡多槽位落座) ===
+  PASS  [kexi] seat settings-card: 全部候选槽位直接注册失败，转入 inject 等待 | test-settings-seat: 12/12 通过
+
+=== test-veto-disagreement.py (硬风控否决/分歧度) ===
+  PASS    ✓ ② 日线vs周线背离被自动识别 |   ✓ ② 无结构化结论时不误报 |   ✓ ② 分歧 0.1 不误报
+
+=== test-stop-plan.py (可执行止损) ===
+  PASS    ✓ 无现价时返回明确说明而非编造 |   ✓ 真实 PYTH：止损落在守拙实测区间(0.0685~0.0715)附近 |   ✓ 真实 PYTH：结构位 -53.7% 被明确标注不可用作止损
+
+=== test-futures-fallback.py (合约情绪 OKX 兜底) ===
+  PASS    ✓ 降级时如实说明 provider |   ✓ 非币安来源时警告不可横比 |   ✓ 币量×标记价 ≈ 美元名义（量纲自洽）
+
+=== test-fast-confidence.py (快答置信度 + 三情景区间) ===
+  PASS  test-fast-confidence: 90/90 通过
+
+=== test-prediction-log.py (决策留痕与事后对账) ===
+  PASS  test-prediction-log: 56/56 通过
+
+=== test-derivs-crosssource.py (跨所跨源矛盾检测) ===
+  PASS    ✓ ⑩ 端到端返回体带 informational_note 说明 |   ✓ ⑩ 端到端 divergences 只含 actionable 项 |   ✓ ⑩ 端到端 informational 不含 actionable 项
+
+=== test-unlock-fetch.py (解锁日历免费源) ===
+  PASS    ✓ 取不到时 consistent 不谎报 True |   ✓ 取数错误被如实转录 |   ✓ 覆盖度只算未来事件
+
+=== test-cex-live-safety.py (CEX 实盘安全性质) ===
+  PASS  test-cex-live-safety: 49/49 通过
+
+=== test_batch.mjs (批量 + files 端到端) ===
+  PASS    ✓ files 模式有历史分组说明 |  | ✅ 批量 + files 清单 端到端通过
+
+=== test_runmarker.mjs (本轮标记时序) ===
+  PASS    ✓ 上一轮看板被判为【历史】 |  | ✅ run 标记时序修复确认
+
+=== test_cwd_fix.mjs (脚本 CWD) ===
+  PASS    ✓ 相对 --out-dir 已绝对化到工作区  [C:/Python313/python.exe C:\Users\lcl\Desktop\DSH插件开发\K析研判团\preset\kexi-crypto\skills\crypto-market-analysis\scripts\news_watch.py --once --out-dir C:\Users\lcl\Desktop\DSH插件开发\K析研判团\.kexi-test-tmp\cwd-demo\kexi_out\cwdtest] |  | ✅ CWD 修复生效
+
+=== Python 自测 (test_all.py 19 组) ===
+  PASS  ============================================================ | 🎉 全部自测试验均 100% 顺利通过！ | ============================================================
+
+=== check-preset-mount.mjs (真实引导挂载/roster 隐藏/委派行唯一) ===
+  PASS  MOUNT: 委派行配置 toolName=subagent allowedAgentPresets=["kexi-member-market-data","kexi-member-technical","kexi-member-forecaster","kexi-member-risk","kexi-member-falsifier"] |  | PRESET-MOUNT: PASS（退出码 0 = 全部断言通过）
+硬件监控 CSV：C:\Users\lcl\AppData\Local\Temp\kexi-hw\hw-20261115-171523.csv
+
+==============================================================
+全部通过：36 / 36
+下一步：powershell -ExecutionPolicy Bypass -File scripts\sync-install.ps1 -Pack

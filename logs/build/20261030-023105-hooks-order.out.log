@@ -1,0 +1,6 @@
+  ✓ 无 hook 出现在早退 return 之后
+  ✓ SettingsCard 里 CEX hook 块存在
+  ✓ CEX hook 块在早退之前（Hooks 顺序稳定）
+  ✓ 早退前已声明全部 9 个 hook
+
+✅ Hooks 顺序回归通过

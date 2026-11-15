@@ -1,0 +1,26 @@
+源: C:\Users\lcl\Desktop\DSH插件开发\K析研判团\dist\baseline-07cd884
+目: C:\Users\lcl\AppData\Roaming\DSH Desktop\dsh-home\profiles\web\node_modules\dsh-kexi-crypto
+仅校验，不复制。
+
+校验：检查 148 个文件，差异 122，多余 0
+内容不一致:
+  - home-plugin\dsh-kexi-crypto\cordis.patch.yml
+  - home-plugin\dsh-kexi-crypto\kexi-member-presets.yml
+  - home-plugin\dsh-kexi-crypto\lib\client.js
+  - home-plugin\dsh-kexi-crypto\lib\index.mjs
+  - home-plugin\dsh-kexi-crypto\member-personas\falsifier.md
+  - home-plugin\dsh-kexi-crypto\member-personas\forecaster.md
+  - home-plugin\dsh-kexi-crypto\member-personas\market-data.md
+  - home-plugin\dsh-kexi-crypto\member-personas\risk.md
+  - home-plugin\dsh-kexi-crypto\member-personas\technical.md
+  - preset\kexi-crypto\lib\symbol-normalize.mjs
+  - preset\kexi-crypto\skills\crypto-market-analysis\SKILL.md
+  - preset\kexi-crypto\skills\crypto-market-analysis\references\data-sources.md
+  - preset\kexi-crypto\skills\crypto-market-analysis\references\screening-strategy.md
+  - preset\kexi-crypto\skills\crypto-market-analysis\registry\unlock-schedules.json
+  - preset\kexi-crypto\skills\crypto-market-analysis\scripts\ablation_compare.py
+  - preset\kexi-crypto\skills\crypto-market-analysis\scripts\assemble_report.py
+  - preset\kexi-crypto\skills\crypto-market-analysis\scripts\backtest.py
+  - preset\kexi-crypto\skills\crypto-market-analysis\scripts\cex_keystore.py
+  - preset\kexi-crypto\skills\crypto-market-analysis\scripts\cex_risk.py
+  - preset\kexi-crypto\skills\crypto-market-analysis\scripts\cg_registry.py

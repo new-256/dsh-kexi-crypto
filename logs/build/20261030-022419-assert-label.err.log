@@ -1,0 +1,9 @@
+file:///C:/Users/lcl/Desktop/DSH%E6%8F%92%E4%BB%B6%E5%BC%80%E5%8F%91/K%E6%9E%90%E7%A0%94%E5%88%A4%E5%9B%A2/home-plugin/dsh-kexi-crypto/lib/index.mjs:1670
+    throw new Error('kexi-dashboard: agentPresets 服务缺失——内部成员预设无法隐藏，拒绝半残运行')
+          ^
+
+Error: kexi-dashboard: agentPresets 服务缺失——内部成员预设无法隐藏，拒绝半残运行
+    at Module.apply (file:///C:/Users/lcl/Desktop/DSH%E6%8F%92%E4%BB%B6%E5%BC%80%E5%8F%91/K%E6%9E%90%E7%A0%94%E5%88%A4%E5%9B%A2/home-plugin/dsh-kexi-crypto/lib/index.mjs:1670:11)
+    at file:///C:/Users/lcl/Desktop/DSH%E6%8F%92%E4%BB%B6%E5%BC%80%E5%8F%91/K%E6%9E%90%E7%A0%94%E5%88%A4%E5%9B%A2/logs/build/assert-label-v1923.mjs:59:6
+
+Node.js v24.21.0

@@ -1,0 +1,210 @@
+
+[A] host 活动流与设置端点
+  ✓ host 导出 apply
+  ✓ 注册 /status（研判灯）
+  ✓ 注册 /activity（实时进度，需求 1）
+  ✓ 注册 /settings（设置面板，需求 3）
+  ✓ 订阅 session/event（活动流权威源）
+  ✓ /activity 返回 200
+  ✓ 节点数 = 3（实际 3）：turn/step/turn_end/bash 已按 kexi 相关性过滤
+  ✓ kexi_run 翻译为中文动作
+  ✓ agy_run 显示为本地 CLI 节点（需求 2 可见性）
+  ✓ codebuddy_run 显示为 CLI 节点
+  ✓ "工具结果"回溯标记 c1 完成
+  ✓ c1 记录耗时
+  ✓ c1 带"拿到什么"摘要
+  ✓ 失败的 CLI 调用标记 error
+  ✓ CLI 节点计数 = 2（期望 2）
+  ✓ 工具节点计数 = 3（期望 3：bash 已按 kexi 过滤）
+  ✓ 时间线已排除非 kexi 工具（bash）
+  ✓ 时间线仍保留 kexi 工具节点
+  ✓ current 汇报"当前在干什么"
+  ✓ subagent/start 按子会话 preset 映射出成员中文名（agent_preset= 新链路）
+  ✓ subagent 节点落在**父会话**桶（P1-5：parent 实参不可靠，靠 header.parentSession 反查）
+  ✓ 成员启动/结束节点没有写进成员自己的桶（旧实现的症状）
+  ✓ 映射未到时显式标「身份未识别」（不静默套通用成员标签）
+  ✓ 未识别节点带 unknownIdentity 标记（可供回填定位）
+  ✓ 身份到达后回填 label（守拙·风险定级）
+  ✓ 回填同时修正 icon（👤 而不是临时图标 🧑‍🔬）
+  ✓ 回填同时写入 member/agentPreset（卡片与关系图不用再反推）
+  ✓ 回填后清掉 unknownIdentity 标记
+
+[A2] turn/step 生命周期关闭（防节点永久 running / 会话永久 busy）
+  ✓ 纯非研判会话（只有 turn/read）不进入卡片（v1.6.1 会话级过滤）
+  ✓ 有 kexi 活动的会话即使回合 aborted 也保留在卡片里
+  ✓ aborted 回合不 busy（turn 已关闭且工具已结束）
+  ✓ aborted 会话无残留 running 节点
+
+[A3] 最终看板产物登记 / 内嵌服务（成果在 K析页面直接可见）
+  ✓ 注册 /artifact 看板服务路由
+  ✓ /activity 会话带最终成果 artifact（id/name）
+  ✓ artifact 带可内嵌的 url
+  ✓ artifact 路由返回 200
+  ✓ artifact 路由返回看板真实 HTML
+  ✓ 未知 artifact id 返回 404（不可猜路径）
+  ✓ 带 kexi 活动的会话在列表内（会话级过滤放行）
+  ✓ 相对路径/非 .html 不登记 artifact
+  ✓ 无事件但工作目录有看板时，懒发现自动补登成果
+  ✓ 上一轮的旧看板不挂到本会话（不展示旧结论）
+  ✓ 成果初次挂载（本轮看板）
+  ✓ 本轮新看板出现后卡片会刷新（实际显示 run2_dashboard.html）
+
+[A4] latest.json 权威产物优先（v1.4.6）
+  ✓ latest.json 优先于 mtime（登记 algo_dashboard_v2.html）
+  ✓ latest.json 失效（指向不存在文件）→ 回退 mtime 扫描
+  ✓ latest.json 是坏 JSON → 容错回退扫描
+  ✓ latest.json 指向非 HTML → 不登记，回退扫描
+
+[A5] 团队动向 + 评估结论卡片（v1.5.1）
+  ✓ team/member 登记名册（2 位成员）
+  ✓ 成员中文名映射（shuma→数脉，phase=active）
+  ✓ 两次 team/member 事件合并为 1 条「团队就位」（实际 1 条）
+  ✓ 合并节点 detail 含成员名（数脉）
+  ✓ 合并节点 detail 含成员名（守拙）
+  ✓ 合并节点 members 数组含 2 位成员
+  ✓ 旧的逐成员 team_member 节点已不再产生
+  ✓ 派活节点"主理人 → 数脉 派活"（targetId 经 catalog 翻译为中文名）
+  ✓ 派活节点 running（未送达时）
+  ✓ delivered 把派活节点标完成（已送达）
+  ✓ 成员回报节点"数脉 → 主理人 回报结论"
+  ✓ 成员动向 lastNote 记录派活内容（卡片可见"正在干什么"）
+  ✓ assistant 长文本登记为评估结论 evaluation
+  ✓ 评估结论裁剪到 ≤1300 字符（卡片可读）
+  ✓ send_message 工具节点翻译为"派活给 指北"
+  ✓ 未知团队事件不崩（默认分支忽略）
+
+[A6] v1.5.2 线上取证回归（卡片无响应 / 标签信息丢失）
+  ✓ arguments 为 JSON 字符串时也能解析（派活给 数脉）
+  ✓ kexi_run 标签带出币种（字符串参数同样解析）
+  ✓ 正常态 label = 委派 指北·技术指标（实际 委派 指北·技术指标）
+  ✓ 正常态带出 member/agentPreset（供名册与关系图）
+  ✓ 坏 JSON → label 含「参数解析失败」（实际 委派（参数解析失败））
+  ✓ 坏 JSON → detail 回显原始 args
+  ✓ 缺 agent_preset → label 含「继承主理人预设」（实际 委派子代理（继承主理人预设））
+  ✓ 未知 preset → label 含「未知预设」且 detail 回显 id（实际 委派子代理（未知预设） / kexi-member-ghost）
+  ✓ 4 次 subagent 调用都进了活动流（JSON 字符串 args 全解析）
+  ✓ 非本团队预设会话的 subagent 调用不算 kexi 活动（工具名不是判据，preset 才是）
+  ✓ 持久成员在名册里显示中文名（实际 数脉,指北）
+  ✓ subagent/catalog 不再把 label 自由文本当成员名
+  ✓ 主理人在 wait_agent 等待期间 busy=true（卡片不再显示空闲）
+  ✓ current 指向"等待成员回报"
+  ✓ 成员在**自己会话**里干活 → 主理人名册同步点亮（跨会话）
+  ✓ 成员动向显示其真实在跑什么（screener.py）
+
+[B] 设置端点
+  ✓ GET /settings 200 ok
+  ✓ 默认 showProgressPopup=true
+  ✓ 默认 CLI 优先级 agy 优先
+  ✓ 默认 screenerWorkers=6（6）
+  ✓ 越界 maxEventNodes 收敛到 200（200）
+  ✓ 越界 screenerTop 收敛到 10（10）
+  ✓ 越界 screenerWorkers 收敛到 16（16）
+  ✓ screenerWorkers=0 收敛到 1（1）
+  ✓ 未提交字段保持默认
+  ✓ 设置落盘到 kexi-settings.json
+  ✓ 落盘内容 = 收敛后的值
+  ✓ 下限收敛到 20（20）
+  ✓ maxEventNodes=20 裁剪生效
+  ✓ 上调 60 后返回全部 30 个
+  ✓ 空 body POST 不崩
+
+[C] 研究状态灯回归 + 容错
+  ✓ 研判灯 presetActive/running 正常
+  ✓ 研判灯显示币种
+  ✓ pipeline 步骤同步进活动流
+  ✓ 坏输入不抛异常
+
+[D] kexi_cli 本地 CLI 编排（需求 2）
+  ✓ 注册 kexi_cli
+  ✓ 原有三工具仍注册（回归）
+  ✓ 探测到 agy,codebuddy（agy,codebuddy）
+  ✓ 未安装的 mimo 不出现
+  ✓ 缺省按优先级选 agy
+  ✓ prompt+context 透传且调对工具
+  ✓ 默认后台执行
+  ✓ jobId 回传 + next 指引收集
+  ✓ 可指定 codebuddy
+  ✓ 指定未安装的 mimo → 明确报错（不静默换源）
+  ✓ 报错时确实没有调用任何 CLI
+  ✓ 附带"不得谎称"纪律
+  ✓ 未知 CLI 名 → 报错
+  ✓ 缺 prompt → 报错
+  ✓ 禁用 agy 后只剩 codebuddy（codebuddy）
+
+[E] 无 CLI 时诚实降级 + 坏配置容错
+  ✓ 无 CLI 时 list 返回空列表（不报错）
+  ✓ 如实说明 + 禁止假装有 CLI 协助
+  ✓ 无 CLI 时 run 如实失败
+  ✓ 坏设置文件回退默认（仍探测到 agy）
+
+[F] kexi_run 自动 CLI 交叉验证
+  ✓ 流水线应成功（实际 "undefined"）
+  ✓ 第5步自动派 agy 复核（prompt 含角色设定）
+  ✓ 交叉验证走前台（同步骤内联等待）
+  ✓ 第6/7步仍执行（不阻塞看板）
+  ✓ digest 带 CLI 复核行（{"ok":true}；CLI 复核(agy): 同意…）
+  ✓ crosscheck 写入 report.json（来源=agy）
+  ✓ crosscheck.note 有内容
+  ✓ crosscheck 注明"脚本数据为准"规则
+  ✓ 无 CLI 时流水线仍成功（诚实降级）
+  ✓ 无 CLI → crosscheck.status=skipped（本机无可用的本地 CLI（agy/codebuddy/mimo 均未探测到））
+  ✓ digest 不虚报 CLI 复核
+  ✓ 关闭设置 → status=disabled
+  ✓ CLI 复核失败不拖垮流水线
+  ✓ CLI 异常 → skipped(原因记录)
+
+[G] kexi_ensure_team 持久团队预置
+  ✓ 注册 kexi_ensure_team
+  ✓ ensure_team 成功（默认持久团队开）
+  ✓ 创建 5 位持久成员（v1.5.9 加证伪红队，实际 5）
+  ✓ 每位按 fresh + provider spawn 创建
+  ✓ 成员 shuma 被创建恰好一次（实际 1 次）
+  ✓ 成员 zhibei 被创建恰好一次（实际 1 次）
+  ✓ 成员 wangchao 被创建恰好一次（实际 1 次）
+  ✓ 成员 shouzhuo 被创建恰好一次（实际 1 次）
+  ✓ 成员 zhengfu 被创建恰好一次（实际 1 次）
+  ✓ 五位成员互不重复且无多余 spawn（实际 ["shuma","zhibei","wangchao","shouzhuo","zhengfu"]）
+  ✓ 证伪（红队）确实被创建——只数个数会在成员重复时假绿
+  ✓ 返回名册含证伪中文名
+  ✓ 返回名册含主理人 + 中文名
+  ✓ 再次调用幂等（spawn 数仍 5）
+  ✓ digest 说明成员均已存在
+  ✓ persistentTeam=false → 不创建成员
+  ✓ 说明走按需路径
+  ✓ 无 agentTeams 服务时诚实降级（不报错）
+
+[H] kexi_run 自动兜底建队（v1.4.6）
+  ✓ 未调 ensure_team 直接跑 kexi_run → 自动补建 5 位（实际 5）
+  ✓ 兜底建队形态与 ensure_team 一致（fresh + spawn）
+  ✓ digest 如实告知已自动补建（"ok":true}；已自动补建持久团队（数脉、指北、望潮、守拙、证伪）——下次可省略 kexi_ensure_team）
+  ✓ 同会话第二次只兜底一次（spawn 数仍 5）
+  ✓ 显式 ensure_team 先建 5 位
+  ✓ ensure_team 之后再跑 kexi_run 不重复建队（spawn 数仍 5）
+  ✓ 成员会话不建队（避免 TEAM_LEAD_REQUIRED）
+  ✓ persistentTeam=false → 兜底不建队（守开关）
+  ✓ 建队异常时 pipeline 仍成功（兜底不阻断研判）
+  ✓ digest 如实记录建队失败原因
+
+[I] kexi_news 新闻通道探测（v1.4.6）
+  ✓ 注册 kexi_news
+  ✓ 通道可用 → news_available=true
+  ✓ 只探测一次（实际 1）
+  ✓ digest 说明通道可用
+  ✓ 401/被拦 → news_available=false（不报错）
+  ✓ 显式标记「新闻面缺失」+ 禁止重试
+  ✓ reason 记录 401 事实
+  ✓ 同会话第二次调用不再探测（走缓存）
+  ✓ 工具异常 → 降级标记缺失
+  ✓ 无检索工具 → 标记缺失并说明原因
+  ✓ 探测结论落盘 news_status.json
+  ✓ 同 cwd 另一成员读到共享结论
+  ✓ 共享结论生效：新成员不重复探测
+  ✓ J1 走 sandboxPolicy.resolve({session}) 而非裸 workspaceRoot
+  ✓ J1 产物落在会话 cwd（实际 C:\Users\lcl\Desktop\DSH插件开发\K析研判团\.kexi-test-tmp\j-session-cwd\kexi_out\news_status.json）
+  ✓ J1 没有误用部署兜底根（旧实现的 bug）
+  ✓ J2 无 resolve() 时回退 header.cwd（实际 C:\Users\lcl\Desktop\DSH插件开发\K析研判团\.kexi-test-tmp\j-header-cwd\kexi_out\news_status.json）
+  ✓ J2 不误用部署兜底根
+
+============================================================
+RUNTIME: ALL PASS  (178 通过 / 0 失败)
+============================================================

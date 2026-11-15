@@ -1,0 +1,12 @@
+真实包 @deepseek-ai/dsh-tool-subagent@0.2.1-alpha.5
+  C:\Users\lcl\AppData\Roaming\DSH Desktop\backend\dsh\node_modules\@deepseek-ai\dsh-tool-subagent\lib\index.js
+  ✓ 从真实包源码提取到 apply() 拒绝字段列表（正则未失效）
+  上游 apply 拒绝字段: persona, toolFilter
+  ✓ 负对照前置：拒绝列表含 persona
+  ✓ 负对照前置：拒绝列表含 toolFilter
+  ✓ js-yaml 可从 DSH_BACKEND 解析
+  ✓ 主补丁内联 5 个成员预设声明行，实际 5
+  ✓ preset-kexi-member-market-data 必须排在 preset-kexi-crypto 之前（注册时序）
+  ✓ preset-kexi-member-technical 必须排在 preset-kexi-crypto 之前（注册时序）
+  ✓ preset-kexi-member-forecaster 必须排在 preset-kexi-crypto 之前（注册时序）
+  ✓ preset-kexi-member-risk 必须排在 preset-kexi-crypto 之前（注册时序）

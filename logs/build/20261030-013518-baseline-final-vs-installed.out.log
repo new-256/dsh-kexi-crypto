@@ -1,0 +1,26 @@
+源: C:\Users\lcl\Desktop\DSH插件开发\K析研判团\dist\baseline-07cd884
+目: C:\Users\lcl\AppData\Roaming\DSH Desktop\dsh-home\profiles\web\node_modules\dsh-kexi-crypto
+仅校验，不复制。
+
+校验：检查 148 个文件，差异 28，多余 0
+内容不一致:
+  - preset\kexi-crypto\kexi-plugin.mjs
+  - preset\kexi-crypto\skills\crypto-market-analysis\scripts\cex_adapter.py
+  - preset\kexi-crypto\skills\crypto-market-analysis\scripts\fast_analysis.py
+  - preset\kexi-crypto\skills\crypto-market-analysis\scripts\fetch_klines.py
+  - preset\kexi-crypto\skills\crypto-market-analysis\scripts\position_doctor.py
+  - preset\kexi-crypto\skills\crypto-market-analysis\tests\sample_report.json
+  - locale\en.json
+  - locale\zh.json
+  - docs\build-logs\hw-monitor-20261018-0208.csv
+  - docs\build-logs\hw-monitor-20261018-0232.csv
+  - docs\build-logs\test-20261018-0208.log
+  - docs\build-logs\test-20261018-0232.log
+  - docs\evidence\backend-misplaced-kexi_out\ALGOUSDT_1d_dashboard.html
+  - docs\evidence\backend-misplaced-kexi_out\ALGOUSDT_1d_indicators.json
+  - docs\evidence\backend-misplaced-kexi_out\ALGOUSDT_1d_klines.json
+  - scripts\run-all-tests.ps1
+  - scripts\sync-install.ps1
+  - scripts\test-cex-credential-schema.py
+  - scripts\test-settings-wiring.py
+  - scripts\_track-session.mjs

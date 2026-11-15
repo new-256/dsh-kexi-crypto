@@ -1,0 +1,35 @@
+· 沙箱 DSH_HOME=C:\Users\lcl\AppData\Local\Temp\kexi-preset-mount-TUIM8x\home
+· 最小 profile bundles=["@deepseek-ai/dsh-base","@deepseek-ai/dsh-web-app","dsh-kexi-crypto"]（webserver 已在用户层 disabled）
+✓ 隔离生效：profileContext.home 指向沙箱（用户 DSH_HOME 未被读取/写入）
+✓ webserver 未挂载（不产生额外端口）
+✓ bot-gateway/截屏服务未挂载（无外部消息通道、无截屏进程）
+✓ kexi-dashboard 已激活（roster 过滤器已安装，证明 apply 跑过）
+✓ clean kexi-crypto (K析研判团)
+✓ clean kexi-member-market-data (数脉·行情取数（内部）)
+✓ clean kexi-member-technical (指北·技术指标（内部）)
+✓ clean kexi-member-forecaster (望潮·趋势推演（内部）)
+✓ clean kexi-member-risk (守拙·风险定级（内部）)
+✓ clean kexi-member-falsifier (证伪·红队（内部）)
+✓ resolve kexi-crypto → 定义可取
+✓ resolve kexi-member-market-data → 定义可取
+✓ resolve kexi-member-technical → 定义可取
+✓ resolve kexi-member-forecaster → 定义可取
+✓ resolve kexi-member-risk → 定义可取
+✓ resolve kexi-member-falsifier → 定义可取
+✓ 内部 list() 仍完整：成员预设 5/5 条
+✓ 浏览器 roster 已隐藏成员预设（可见 5 / 内部 10 行）
+✓ 主预设 kexi-crypto 仍可选（过滤没有过度）
+✓ 浏览器 roster 相对顺序与内部集合一致
+✓ readDocument 成员预设 5/5 可取
+✓ 委派工具恰好 1 个（subagent），allowedAgentPresets 5 项与声明一致
+✓ 真 mount kexi-crypto 成功（返回 id 与请求一致）
+✓ 真实工具面里 5 个旧工具名 0 命中
+  INFO  站立工具面无 subagent：上游按 Agent 发布（allowedAgentPresets 生效时），由挂载树行断言覆盖
+✓ 挂载树里委派行恰好 1 行且 ACTIVE（fiberState=2）
+✓ 挂载树里 5 个旧工具名 0 命中（没有复活成员工具行）
+✓ 真 mount kexi-member-technical 成功（成员预设可被委派行引用）
+
+MOUNT: 真调用 mount() 2 次（kexi-crypto、kexi-member-technical）
+MOUNT: 委派行配置 toolName=subagent allowedAgentPresets=["kexi-member-market-data","kexi-member-technical","kexi-member-forecaster","kexi-member-risk","kexi-member-falsifier"]
+
+PRESET-MOUNT: PASS（退出码 0 = 全部断言通过）

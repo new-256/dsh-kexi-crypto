@@ -1,0 +1,71 @@
+
+── E. 正对照：真仓库 + P2-7 隔离审计 ──────────────────────────
+✓ 真 mount kexi-member-technical 成功（成员预设可被委派行引用）
+
+MOUNT: 真调用 mount() 2 次（kexi-crypto、kexi-member-technical）
+MOUNT: 委派行配置 toolName=subagent allowedAgentPresets=["kexi-member-market-data","kexi-member-technical","kexi-member-forecaster","kexi-member-risk","kexi-member-falsifier"]
+
+PRESET-MOUNT: PASS（退出码 0 = 全部断言通过）
+  ✓  正对照：PRESET-MOUNT PASS 且退出码 0
+  ✓  P2-7 隔离审计三行在场（隔离 home / 无端口 / 无 bot 与截屏）
+  ✓  P1-3 可核对行：真调用 mount() 2 次
+
+── A. 变异：复活旧委派工具行（market_data_specialist）────────────
+
+MOUNT: 真调用 mount() 2 次（kexi-crypto、kexi-member-technical）
+MOUNT: 委派行配置 toolName=subagent allowedAgentPresets=["kexi-member-market-data","kexi-member-technical","kexi-member-forecaster","kexi-member-risk","kexi-member-falsifier"]
+
+PRESET-MOUNT: FAIL（退出码 1：断言失败）
+失败断言 2 条：
+  ✗ kexi-crypto 预设里应有 1 个委派工具行，实际 2
+  ✗ 预设文档仍以旧工具名注册委派行: market_data_specialist
+  ✓  旧工具名复活 → 断言失败（委派行数≠1 且旧 toolName 命中）
+
+── B. 变异：注释掉 roster 过滤器安装（模拟 v1.9.22）──────────────
+✓ 真 mount kexi-member-technical 成功（成员预设可被委派行引用）
+
+MOUNT: 真调用 mount() 2 次（kexi-crypto、kexi-member-technical）
+MOUNT: 委派行配置 toolName=subagent allowedAgentPresets=["kexi-member-market-data","kexi-member-technical","kexi-member-forecaster","kexi-member-risk","kexi-member-falsifier"]
+
+PRESET-MOUNT: FAIL（退出码 1：断言失败）
+失败断言 3 条：
+  ✗ kexi-dashboard 未激活（agentPresets 上没有 roster 过滤器标记）——说明 inject:["agentPresets"] 未解析，状态灯/设置面板/活动流整插件都不会工作
+  ✗ 浏览器 roster 仍能看到内部成员预设: kexi-member-market-data, kexi-member-technical, kexi-member-forecaster, kexi-member-risk, kexi-member-falsifier
+  ✗ 浏览器 roster 相对顺序与内部集合不一致（order 被破坏）
+  ✓  过滤器缺失 → 断言失败（浏览器 roster 泄露 + 未激活标记）
+
+── C. 变异：给委派行塞回 persona（v1.9.21 真实事故形态）──────────
+· 沙箱 DSH_HOME=C:\Users\lcl\AppData\Local\Temp\kexi-preset-mount-qmKoHq\home
+✓ 真 mount kexi-member-technical 成功（成员预设可被委派行引用）
+MOUNT: 真调用 mount() 1 次（kexi-crypto、kexi-member-technical）
+PRESET-MOUNT: FAIL（退出码 1：断言失败）
+  ✗ BROKEN kexi-crypto
+  ✗ mount(kexi-crypto) 抛错: tool-subagent (@deepseek-ai/dsh-tool-subagent): tool-subagent: persona is no longer supported; configure persona and tool plugins in an Agent Preset and select it with agentPreset (spawn only)
+  ✗ 真调用 mount() 次数应为 2，实际 1（"没真挂载"正是 P1-3 的原始缺陷）
+  ✓  预设坏了 → 断言失败（BROKEN kexi-crypto 且挂载抛错，退出码 1 不是 2）
+
+── D. 变异：清空 REDACTIONS（脱敏自检必须失败）──────────────────
+自检 token=abcd*** → token=abcd***
+  自检 sk-*** → sk-***
+  自检 ws://host:3001?access_token=zzzz*** → ws://host:3001?access_token=zzzz***
+  自检 "apiKey": k-12***" → "apiKey": k-12***"
+SELFTEST REDACTION: PASS（4/4 形态已遮蔽）
+  ✓  未变异：脱敏自检 PASS（4/4 形态遮蔽）且退出码 0
+自检 token=abcdef123456 → token=abcdef123456
+  自检 sk-abcdefgh12345678 → sk-abcdefgh12345678
+  自检 ws://host:3001?access_token=zzzz9999 → ws://host:3001?access_token=zzzz9999
+  自检 "apiKey": "k-1234567890" → "apiKey": "k-1234567890"
+SELFTEST REDACTION: FAIL（未遮蔽: token=abcdef123456 | sk-abcdefgh12345678 | ws://host:3001?access_token=zzzz9999 | "apiKey": "k-1234567890"）
+  ✓  清空 REDACTIONS → 自检 FAIL 且退出码 1（脱敏不是纸面承诺）
+
+========================================================================
+P1-3/P2-7 负对照：8/8 符合预期
+========================================================================
+  ✓ 正对照：PRESET-MOUNT PASS 且退出码 0
+  ✓ P2-7 隔离审计三行在场（隔离 home / 无端口 / 无 bot 与截屏）
+  ✓ P1-3 可核对行：真调用 mount() 2 次
+  ✓ 旧工具名复活 → 断言失败（委派行数≠1 且旧 toolName 命中）
+  ✓ 过滤器缺失 → 断言失败（浏览器 roster 泄露 + 未激活标记）
+  ✓ 预设坏了 → 断言失败（BROKEN kexi-crypto 且挂载抛错，退出码 1 不是 2）
+  ✓ 未变异：脱敏自检 PASS（4/4 形态遮蔽）且退出码 0
+  ✓ 清空 REDACTIONS → 自检 FAIL 且退出码 1（脱敏不是纸面承诺）

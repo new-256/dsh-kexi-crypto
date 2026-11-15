@@ -1,0 +1,5 @@
+PSModulePath=[C:\Users\lcl\Documents\PowerShell\Modules;C:\Program Files\PowerShell\Modules;c:\program files\powershell\7\Modules;C:\Program Files\WindowsPowerShell\Modules;C:\Windows\system32\WindowsPowerShell\v1.0\Modules]
+FILECMD=MISSING
+PSHOME=[C:\Windows\System32\WindowsPowerShell\v1.0]
+LANGMODE=FullLanguage
+PATH_HAS_PSHOME=True

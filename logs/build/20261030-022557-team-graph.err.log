@@ -1,0 +1,7 @@
+At C:\Users\lcl\Desktop\DSH插件开发\K析研判团\logs\build\_tmp\20261030-022557-team-graph.gate.ps1:23 char:27
++ "C:\Python313\python.exe" scripts\test-team-graph.py
++                           ~~~~~~~~~~~~~~~~~~~~~~~~~~
+Unexpected token 'scripts\test-team-graph.py' in expression or statement.
+    + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : UnexpectedToken
+ 

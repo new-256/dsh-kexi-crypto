@@ -1,0 +1,127 @@
+
+[D1 符号规范化]
+  ✓ 裸符号 BTC → BTCUSDT
+  ✓ 裸符号 BTC 标记为已改写
+  ✓ 裸符号 BTC 给出改写说明
+  ✓ 已带后缀 BTCUSDT 不改写
+  ✓ 已带后缀 changed=false
+  ✓ 小写 btc → BTCUSDT
+  ✓ 分隔符 btc/usdt → BTCUSDT
+  ✓ 分隔符 ETH-USDT → ETHUSDT
+  ✓ 前后空白 "  sol  " → SOLUSDT
+  ✓ BTC/ETH 计价对 ETHBTC 保持原样
+  ✓ 纯计价币 USD 报错而非补成 USDUSDT
+  ✓ 纯计价币 USDT 报错
+  ✓ BTC 不被误判为纯计价币
+  ✓ ETH 不被误判为纯计价币
+  ✓ PURE_QUOTES 不含 BTC/ETH/BNB
+  ✓ 空串报错
+  ✓ 纯空白报错
+  ✓ 非法字符 !@# 报错
+  ✓ 非法字符不返回符号
+  ✓ 批量去重保序
+  ✓ 批量收集改写说明
+  ✓ 批量 changed=true
+  ✓ 批量对空段不报错
+  ✓ JS/Python 符号规范化逐项一致
+
+[D2 真实成败语义]
+  ✓ fast_analysis 不再恒 print ok:True
+  ✓ 全失败时返回非零退出码
+  ✓ 存在 all_failed 判定
+  ✓ 存在 degraded 标记
+  ✓ 存在 failed_symbols 列表
+  ✓ 失败评级纳入判定
+  ✓ plugin 读取脚本自身 ok 而非只看 exit code
+  ✓ plugin 失败时返回 ok:false
+  ✓ plugin 向上透传 degraded
+
+[D3 取数性能预算]
+  ✓ fetch_binance 有 time_budget 参数
+  ✓ fetch_binance 检查 deadline
+  ✓ HTTP 400 短路整条 host 链
+  ✓ HTTP 451 短路整条 host 链
+  ✓ http_get 支持 deadline
+  ✓ http_get 重试前检查 deadline
+  ✓ fast_analysis 有 --time-budget
+  ✓ 超预算标记为未分析
+  ✓ 参照币使用轻预算 3s
+  ✓ 非法符号在取数前短路
+
+[D4 产物语义校验]
+  ✓ 定义了产物签名表
+  ✓ 实现了 semanticMismatch
+  ✓ 语义不符纳入质量标记
+  ✓ 识别不出内容时不妄下结论
+  ✓ 现场事故：indicators 内容写进 _position.json 被抓出
+  ✓ 正确配对不误报
+  ✓ 正确 position 不误报
+  ✓ 无法识别内容不误报
+
+[D5 CoinGecko 币表泛化]
+  ✓ cg_registry.py 存在（按规则26拆分）
+  ✓ 实现了 resolve_coingecko_id
+  ✓ 实现了全量币表加载
+  ✓ 币表有 TTL 缓存
+  ✓ 同名多候选按市值裁决
+  ✓ 解析失败时明确报错而非猜
+  ✓ 静态表降级为速查缓存（有注释说明）
+  ✓ HTTP 实现可注入（便于离线测试）
+  ✓ fetch_klines 转发到 cg_registry
+  ✓ fetch_coingecko 走动态解析
+  ✓ fetch_quote 也走动态解析
+  ✓ 注入 http_get 给 cg_registry
+
+[D10 落盘快照滞后]
+  ✓ 写盘后回读校验
+  ✓ 回读不一致时 exit 4
+  ✓ 比对 bars 与末根时间戳
+  ✓ 插件侧读取 self_check
+
+[D11 质检字段]
+  ✓ 输出含 self_check
+  ✓ self_check 含 bars
+  ✓ self_check 含 last_closed_open
+
+[编排层 D6/D7/D8/D9]
+  ✓ Workflow D 触发词含「选币」
+  ✓ Workflow D 触发词含「挑 N 个」
+  ✓ Workflow D 触发词含「给我推荐几个」
+  ✓ 存在 Workflow O（仓位体检）
+  ✓ Workflow O 覆盖「仓位诊断」
+  ✓ Workflow O 与 G 有区分说明
+  ✓ 快速通道给出「必须派活」判据表
+  ✓ 判据含多标的组合决策
+  ✓ 判据含真实资金动作
+  ✓ 有「建了队就必须派活」专节
+  ✓ 等待期纪律写入 SKILL
+  ✓ wait_agent 超时应对写清楚
+  ✓ plugin 规则含建队必派活
+  ✓ plugin 规则含仓位走 Workflow O
+  ✓ plugin 规则含等待期纪律
+  ✓ 标题改为 A~O 全量枚举
+
+[S4 独立数值复核入口]
+  ✓ verify_numbers.py 存在
+  ✓ 复用主链指标函数（口径一致）
+  ✓ 只读原始 K 线（不读已有指标产物做输入）
+  ✓ 支持 --check name=value 直接核对
+  ✓ 有相对容差而非零容差
+  ✓ 识别语义错位（position 文件装指标内容）
+  ✓ 只列差异不裁决
+  ✓ 符号走统一规范化
+  ✓ 已纳入 kexi_run 白名单
+  ✓ 规则 9b 指向官方复核入口
+  ✓ SKILL 写入复核用法
+
+[单文件行数约束]
+  ✓ symbol-normalize.mjs ≤600 行
+  ✓ members.mjs ≤600 行
+  ✓ preset-roster.mjs ≤600 行
+  ✓ kline_utils.py ≤600 行
+  ✓ fetch_klines.py ≤600 行
+  ✓ cg_registry.py ≤600 行
+  ✓ verify_numbers.py ≤600 行
+
+────────────────────────────────────────────────────────────
+v1.9.22 回归：PASS（104 项）

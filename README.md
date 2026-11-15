@@ -3,7 +3,19 @@
 **加密货币趋势研判 6 人专家团** —— 加密货币全流程研判与选币系统，
 面向选币质量升级、多面数据源、真实 CEX 实盘接入与风控、长期保活与通知、Token 消耗统计、历史实操经验建档交付全新重构。
 
-版本 **v1.5.9** · 依赖 DSH ≥ 0.1.7-rc
+版本 **v1.9.24** · 依赖 DSH ≥ 0.2.1-alpha.5
+
+> **v1.9.24 提示**：适配 DSH 0.2.2-rc.3。此前 GUI 显示「加载失败」的真因是
+> `cordis.patch.yml` 里 `tool-subagent-list-agents` 子路径行在 0.2.2 已失效
+> （`list_agents` 已并入 `dsh-tool-subagent-control` 主入口统一注册），该行已删除。
+> 使用 DSH ≥ 0.2.2 时请升级本插件至 v1.9.24。
+
+> **v1.9.23 提示（破坏性）**：5 个委派工具（`market_data_specialist` /
+> `technical_indicators` / `trend_forecaster` / `risk_assessor` /
+> `falsification_challenger`）已收敛为**一个** `subagent` 工具，成员用
+> `agent_preset` 参数选择（`kexi-member-market-data` 等 5 个内部预设）。
+> 这 5 个内部成员预设也不再出现在「智能体预设」选择器里——直接用「K析研判团」
+> 主预设开会话即可。持久团队编排（`kexi_ensure_team` + `send_message`）不变。
 
 > 一句话：选 preset「K析研判团」开会话 → 说"研判一下 ETH"或"帮我选币" → 主理人 K析 调度
 > 数脉/指北/望潮/守拙/证伪 五位成员（持久团队/按需协作）→ 28 个脚本全链量化支撑 → 过 JSON 契约闸门 →

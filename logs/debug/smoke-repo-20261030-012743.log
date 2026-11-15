@@ -1,0 +1,4 @@
+  INFO  无参运行会挂起(>25s)的脚本: backtest.py, news_watch.py
+        流水线从不裸调它们，但模型漏参时会多烧一次超时。
+  FAIL  ③ 缺参数时是干净的 argparse 报错，不是 Python 堆栈   堆栈崩溃: ['new_listing.py → RuntimeError: HTTP Error 451:', 'screener.py → RuntimeError: /api/v3/ticker/24hr failed after 2 retries: HTTP Error 451:']
+test-scripts-smoke: 10/11 通过

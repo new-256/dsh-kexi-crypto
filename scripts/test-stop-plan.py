@@ -63,22 +63,50 @@ sp3 = fa.build_stop_plan([], {"close": None}, [])
 ck('无现价时返回明确说明而非编造', sp3.get('tactical') is None and '无现价' in (sp3.get('note') or ''), '')
 
 # ④ 端到端：真实 PYTH 数据
-K = r'C:\Users\lcl\Desktop\K析工作文件夹\kexi_out'
+# ⚠ 这份基线在**仓库之外**（用户真实产出目录），干净机器上不存在。体检 P1-6 /
+#   规则 1 的教训是：旧实现"路径不存在就整段不注册断言"，分母跟着缩水，
+#   测试照报 N/N 通过——等于这两条最贴近真金白银的断言在 CI 上恒为未验证。
+#   现在改为 **fail-loud**：断言恒定注册（分母恒为 9），基线缺失/损坏就判失败，
+#   并把期望路径与取得方式打印出来，让门禁红得可解释。
+#   目录支持 KEXI_REAL_DIR 覆盖，避免"只有开发机这一台能跑"。
+K = os.environ.get('KEXI_REAL_DIR') or r'C:\Users\lcl\Desktop\K析工作文件夹\kexi_out'
 real_kl_path = os.path.join(K, 'PYTHUSDT_1d_klines.json')
-if os.path.exists(real_kl_path):
-    with open(real_kl_path, encoding='utf-8') as f:
-        rk = json.load(f).get('klines')
-    close = rk[-1][4]
-    atr = close * 0.075366
-    rres = {"close": close, "ma": {"ma20": 0.06241}, "volatility": {"atr": atr, "atr_pct": 7.5366},
-            "entry_plan": {"invalidation": {"price": 0.03763}}}
-    rsp = fa.build_stop_plan(rk, rres, supports=[0.08, 0.078, 0.07769, 0.06241])
-    tactical = rsp.get('tactical')
+_REAL_HINT = ('期望路径: %s\n'
+              '        取得方式: 对 PYTHUSDT 产出日线分析（快析写盘目录即 K），'
+              '或把 KEXI_REAL_DIR 指向已含该文件的目录'
+              % real_kl_path)
+
+_rsp = None
+_fail_note = ''
+if not os.path.exists(real_kl_path):
+    _fail_note = '基线缺失，本条未验证（禁止静默跳过）\n        ' + _REAL_HINT
+else:
+    try:
+        with open(real_kl_path, encoding='utf-8') as f:
+            rk = json.load(f).get('klines')
+        if not rk:
+            raise ValueError('文件里没有非空 klines 数组')
+        close = rk[-1][4]
+        atr = close * 0.075366
+        rres = {"close": close, "ma": {"ma20": 0.06241},
+                "volatility": {"atr": atr, "atr_pct": 7.5366},
+                "entry_plan": {"invalidation": {"price": 0.03763}}}
+        _rsp = fa.build_stop_plan(rk, rres, supports=[0.08, 0.078, 0.07769, 0.06241])
+        print('  基线：真实 PYTH 产出 %s' % real_kl_path)
+    except Exception as e:                                  # noqa: BLE001
+        _fail_note = ('基线不可用（%s），本条未验证\n        %s'
+                      % (e, _REAL_HINT))
+
+if _fail_note:
+    ck('真实 PYTH：止损落在守拙实测区间(0.0685~0.0715)附近', False, _fail_note)
+    ck('真实 PYTH：结构位 -53.7% 被明确标注不可用作止损', False, _fail_note)
+else:
+    tactical = _rsp.get('tactical')
     ck('真实 PYTH：止损落在守拙实测区间(0.0685~0.0715)附近',
        tactical is not None and 0.066 <= tactical <= 0.075,
        f"快答={tactical} vs 守拙=0.0715（盘中硬止损 0.0685）")
     ck('真实 PYTH：结构位 -53.7% 被明确标注不可用作止损',
-       '不可当作止损' in (rsp.get('note') or ''), '')
+       '不可当作止损' in (_rsp.get('note') or ''), '')
 
 ok = sum(1 for _, c, _ in checks if c)
 print('=' * 70)

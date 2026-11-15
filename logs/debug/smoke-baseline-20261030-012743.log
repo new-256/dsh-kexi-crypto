@@ -1,0 +1,5 @@
+  INFO  无参运行会挂起(>25s)的脚本: backtest.py, news_watch.py
+        流水线从不裸调它们，但模型漏参时会多烧一次超时。
+  INFO  无参裸跑联网、当前网络快速失败的脚本: new_listing.py, screener.py
+        根异常为标准库网络层错误（非代码堆栈）；流水线从不裸调它们。
+test-scripts-smoke: 11/11 通过

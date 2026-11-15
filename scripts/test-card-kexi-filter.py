@@ -44,9 +44,14 @@ ck('① host 有 isKexiNode 判定', 'function isKexiNode' in host, '')
 ck('① 用白名单 KEXI_TOOLS 而非黑名单（漏进来的少才是对的）',
    'const KEXI_TOOLS = new Set' in host, '')
 for t in ('kexi_run', 'kexi_cex', 'kexi_ensure_team',
-          'market_data_specialist', 'falsification_challenger',
+          'subagent',
           'send_message', 'wait_agent'):
     ck('① 白名单含关键工具 %s' % t, ("'%s'" % t) in host, '')
+# v1.9.23：委派工具收敛为 1 个 subagent，5 个旧成员工具名必须从白名单彻底消失
+# （否则旧名残留会被当成"研判工具"，让非研判委派也点亮卡片）
+for t in ('market_data_specialist', 'technical_indicators', 'trend_forecaster',
+          'risk_assessor', 'falsification_challenger'):
+    ck('① 白名单已移除旧委派工具名 %s' % t, ("'%s'" % t) not in host, '')
 ck('① 白名单不含 write/edit（写文件不是研判活动）',
    "'write'" not in host.split('const KEXI_TOOLS')[1].split('])')[0], '')
 
@@ -56,8 +61,13 @@ ck('② turn 节点标 kexi:false（纯聊天不算研判进度）',
    'turn 节点未标 kexi:false')
 ck('② step 节点标 kexi:false', re.search(r"kind:\s*'step'[^\n]*kexi:\s*false", host) is not None, '')
 ck('② tool/call 调用时用 isKexiTool 打标',
+   re.search(r"kind:\s*'tool'[^\s]*[\s\S]{0,420}?kexi:\s*data\.name\s*===\s*'subagent'\s*\?\s*isKexiSubagentCall",
+            host) is not None or
    re.search(r"kind:\s*'tool'[^\s]*[\s\S]{0,320}?kexi:\s*isKexiTool", host) is not None,
    'tool 节点未按工具名打 kexi 标')
+# v1.9.23：subagent 是通用工具名，必须追加 preset 判据（否则别的预设的普通子代理也点亮卡片）
+ck('② subagent 的 kexi 判据追加了 preset 条件（工具名不是唯一判据）',
+   'isKexiSubagentCall' in host and 'isKexiPreset' in host, '缺 isKexiSubagentCall/isKexiPreset')
 
 # ── ③ 会话级过滤：只显示当前会话 / 有 kexi 活动的会话 ──────────────────
 ck('③ /activity 支持 sessionId 查询参数', "searchParams.get('sessionId')" in host, '')

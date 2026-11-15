@@ -118,10 +118,18 @@ import { pathToFileURL } from 'node:url'
 const HOST = process.argv[2]
 const routes = new Map(); const handlers = new Map()
 const fakeWs = { register: (r) => { routes.set(r.path, r); return () => routes.delete(r.path) } }
+// v1.9.23：设计 B 包裹 agentPresets.remoteExportList，夹具必须提供该服务
+const fakePresets = {
+  async list() { return [] },
+  async remoteExportList() { return { presets: [{ id: 'standard', isDefault: true }] } },
+}
 // ⚠ host 的 web 路由服务来自 **ctx.inject**（不是 ctx.get）——照抄 test-runtime.mjs 的
 // harness 形状，否则 routes 永远为空，探针会静默拿不到数据。
 const ctx = {
   on(name, fn) { if (!handlers.has(name)) handlers.set(name, []); handlers.get(name).push(fn); return () => { } },
+  // v1.9.23：host 声明 inject=['agentPresets'] 并包裹其 remoteExportList（设计 B），
+  // 夹具缺这个服务时插件会按设计当场抛错（fail-loud 是特性，不是夹具可以忽略的噪音）。
+  get(n) { return n === 'agentPresets' ? fakePresets : undefined },
   inject(_deps, cb) { cb({ get: (n) => (n === 'webServer' ? fakeWs : undefined), effect: (fn) => { const d = fn(); return typeof d === 'function' ? d : () => { } } }) },
   effect(fn) { const d = fn(); return typeof d === 'function' ? d : () => { } },
 }
@@ -135,19 +143,26 @@ function call(path){ return new Promise(res=>{ const req={method:'GET',url:path,
 const lead = { id:'sess-L', cwd:'C:/w' }
 const shumaId = 'mem-shuma-0000-0000-0000-000000000001'
 const zhibeiId = 'mem-zhibei-0000-0000-0000-00000000002'
-for (const [id, name, cn] of [[shumaId,'shuma','数脉'],[zhibeiId,'zhibei','指北']]) {
+const wangchaoId = 'mem-wangchao-0000-0000-0000-000000003'
+for (const [id, name, cn] of [[shumaId,'shuma','数脉'],[zhibeiId,'zhibei','指北'],[wangchaoId,'wangchao','望潮']]) {
   emit('session/event', lead, { type:'team/member', data:{ teamId:'t',
     member:{ id, name, description: cn+' 职责', provider:'spawn', context:'fresh', phase:'active' } } })
 }
 emit('session/event', lead, { type:'team/message/queued', data:{ teamId:'t', message:{
   id:'m1', senderId:'sess-L', senderName:'lead', targetId:shumaId,
   content:[{type:'text',text:'拉 300 个标的的日线并做质检'}] } } })
-// 数脉正在跑取数脚本
+// v1.9.23（体检 P0-1）：真实事件里 tool/call 的 arguments 是 **JSON 字符串**。
+// 数脉用字符串注入（这正是线上形态；旧夹具全喂对象，所以 script 恒 null 的缺陷
+// 在测试里完全看不到）；坏 JSON 另起一位成员，验证"显式标注解析失败"。
 emit('session/event', { id: shumaId, cwd:'C:/w' },
-  { type:'tool/call', data:{ callId:'a1', name:'kexi_run', arguments:{ mode:'script', script:'fetch_klines.py' } } })
-// 指北在跑指标脚本
+  { type:'tool/call', data:{ callId:'a1', name:'kexi_run',
+    arguments:'{"mode":"script","script":"fetch_klines.py"}' } })
+// 指北保留**对象形态**：两种形态必须都能解析（兼容性，别把对象路径写死掉了）
 emit('session/event', { id: zhibeiId, cwd:'C:/w' },
   { type:'tool/call', data:{ callId:'b1', name:'kexi_run', arguments:{ mode:'script', script:'indicators.py' } } })
+// 望潮：坏 JSON → 必须落「其他工作」但 activity 里显式写"参数解析失败"，不许静默
+emit('session/event', { id: wangchaoId, cwd:'C:/w' },
+  { type:'tool/call', data:{ callId:'c1', name:'kexi_run', arguments:'{"mode":"script",' } })
 // 回报
 emit('session/event', lead, { type:'team/message/queued', data:{ teamId:'t', message:{
   id:'m2', senderId:shumaId, senderName:'shuma', targetId:'sess-L',
@@ -171,6 +186,15 @@ try:
            nodes.get('shuma', {}).get('cat') == 'collect', str(nodes.get('shuma')))
         ck('⑦ 运行期：指北被判为「数据分析」',
            nodes.get('zhibei', {}).get('cat') == 'analyze', str(nodes.get('zhibei')))
+        # v1.9.23（P0-1）：字符串形态的 arguments 必须真的解析出脚本名——
+        # 若退回旧实现（直接读 arguments.script），数脉会落「其他工作」，这里立刻红。
+        ck('⑦ 运行期：指北（对象形态）仍解析出脚本，判「数据分析」',
+           nodes.get('zhibei', {}).get('catFrom') == 'tool', str(nodes.get('zhibei')))
+        # 坏 JSON：落「其他工作」但 activity 必须显式写"参数解析失败"，不许静默
+        wc = nodes.get('wangchao', {})
+        ck('⑦ 运行期：坏 JSON 归「其他工作」（不猜分类）', wc.get('cat') == 'other', str(wc))
+        ck('⑦ 运行期：坏 JSON 的 activity 显式标注解析失败',
+           '参数解析失败' in str(wc.get('activity') or ''), str(wc))
         ck('⑦ 运行期：两者 catFrom=tool（实测非推测）',
            nodes.get('shuma', {}).get('catFrom') == 'tool'
            and nodes.get('zhibei', {}).get('catFrom') == 'tool', '')

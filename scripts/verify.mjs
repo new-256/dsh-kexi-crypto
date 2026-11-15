@@ -13,6 +13,46 @@ const problems = []
 const notes = []
 function ok(cond, msg) { if (!cond) problems.push(msg) }
 
+// ── 成员身份唯一真源（v1.9.23）──────────────────────────────────────────────
+// 门禁必须从**运行时同一份实现**取成员 preset id 集合，而不是在测试里再抄一份：
+// 抄一份就必然会出现"表改了、测试没改"的漂移，而这正是本文件要防的东西。
+const membersMod = await import(pathToFileURL(join(ROOT, 'home-plugin/dsh-kexi-crypto/lib/members.mjs')).href)
+const MEMBER_PRESET_IDS = membersMod.MEMBER_PRESET_IDS
+const KEXI_MEMBERS = membersMod.KEXI_MEMBERS
+const OLD_TOOL_NAMES = ['market_data_specialist', 'technical_indicators', 'trend_forecaster', 'risk_assessor', 'falsification_challenger']
+
+/**
+ * 审计 delegation 组的委派工具行（v1.9.23：6 行 → 1 行）。
+ * 返回问题列表（空 = 合规）。单独抽成函数是为了能用**旧形态**喂它做负对照——
+ * 不做负对照的断言只是"永远绿"的装饰（HANDOFF §6.5）。
+ * @param {Array} rows delegation 组的行数组
+ * @param {string[]} declaredIds 成员预设声明 id（权威顺序）
+ */
+function auditDelegation(rows, declaredIds) {
+  const bad = []
+  const subs = (rows || []).filter((r) => r && r.name === '@deepseek-ai/dsh-tool-subagent')
+  if (subs.length !== 1) bad.push(`delegation 组应恰好 1 个 dsh-tool-subagent 行，实际 ${subs.length}`)
+  for (const r of subs) {
+    const cfg = r.config || {}
+    if (cfg.toolName !== 'subagent') bad.push(`${r.id} 的 toolName 应为 subagent，实际 ${cfg.toolName}`)
+    if (cfg.maxDepth !== 1) bad.push(`${r.id} 应 maxDepth: 1（0 会让首次委派即被拒）`)
+    for (const dead of ['persona', 'toolFilter', 'backgroundMode']) {
+      if (Object.hasOwn(cfg, dead)) bad.push(`${r.id} 仍带 0.2.1 已移除字段 ${dead}（会导致预设挂载失败）`)
+    }
+    const allow = cfg.allowedAgentPresets
+    if (!Array.isArray(allow)) { bad.push(`${r.id} 缺 allowedAgentPresets（agent_preset 枚举无处派生）`); continue }
+    if (JSON.stringify(allow) !== JSON.stringify(declaredIds)) {
+      bad.push(`${r.id} allowedAgentPresets 与成员预设声明不一致：${JSON.stringify(allow)} ≠ ${JSON.stringify(declaredIds)}`)
+    }
+  }
+  // 旧形态残留：任何行带 5 个旧 toolName 都算没改完
+  for (const r of rows || []) {
+    const tn = r && r.config && r.config.toolName
+    if (OLD_TOOL_NAMES.includes(tn)) bad.push(`${r.id} 仍以旧工具名 ${tn} 注册委派行（v1.9.23 已收敛）`)
+  }
+  return bad
+}
+
 // ── 1. package.json ─────────────────────────────────────────────────────────
 const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
 ok(pkg.name === 'dsh-kexi-crypto', `包名应为 dsh-kexi-crypto，实际 ${pkg.name}`)
@@ -49,6 +89,26 @@ notes.push(`package.json ${pkg.name}@${pkg.version}`)
   ok(/className:\s*"kexi-ver"/.test(cli), 'client 未在卡片上渲染版本徽标（kexi-ver）')
   ok(/\.kexi-ver\{/.test(cli), 'client 缺 kexi-ver 样式')
 }
+
+// ── 1c. 版本四处一致（v1.9.23 体检 P1-7）───────────────────────────────────
+// 版本号漂移是"界面看着是新的、行为是旧的"的经典来源（HANDOFF §9.16）。
+// 机械断言四处：package.json / CHANGELOG 顶部 / README / HANDOFF。
+{
+  const clHead = (readFileSync(join(ROOT, 'CHANGELOG.md'), 'utf8').match(/^## v([\d.]+)/m) || [])[1]
+  ok(clHead === pkg.version, `CHANGELOG 顶部版本(v${clHead}) ≠ package.json(${pkg.version})`)
+  const readmeV = (readFileSync(join(ROOT, 'README.md'), 'utf8').match(/版本 \*\*v([\d.]+)\*\*/) || [])[1]
+  ok(readmeV === pkg.version, `README 版本(v${readmeV}) ≠ package.json(${pkg.version})`)
+  const handoffV = (readFileSync(join(ROOT, 'HANDOFF.md'), 'utf8').match(/版本 \*\*v([\d.]+)\*\*/) || [])[1]
+  ok(handoffV === pkg.version, `HANDOFF 版本(v${handoffV}) ≠ package.json(${pkg.version})`)
+  notes.push(`版本四处一致 v${pkg.version}（package.json/CHANGELOG/README/HANDOFF）`)
+}
+
+// ── 1d. 废弃死文件不得复活（v1.9.23 体检 P2-1）─────────────────────────────
+// v1.9.21 新增过 kexi-member-presets.yml + cordis:include，v1.9.21 当轮就因 baseUrl
+// 锚点问题改成内联；该文件此后零引用，但"看起来权威"，维护者会去改它而改动零生效。
+// 人格真源是 member-personas/*.md——这里钉死：文件不存在、补丁里不许再有 include 行。
+ok(!existsSync(join(ROOT, 'home-plugin', 'dsh-kexi-crypto', 'kexi-member-presets.yml')),
+  'kexi-member-presets.yml 已删除（零引用死代码），不得复活；人格真源是 member-personas/*.md')
 
 // ── 2. icon ≤256 KiB ────────────────────────────────────────────────────────
 const iconPath = join(ROOT, pkg.icon.replace(/^\.\//, ''))
@@ -115,8 +175,11 @@ if (yaml) {
     // 解析且不支持 !!js，bundle 行 baseUrl=profile 根，外部文件方案两条路都
     // 断（v1.9.21 headless 实测），故内联。
     const inlineMemberRows = rows.filter((r) => /^preset-kexi-member-/.test(r.id))
-    const memberPresetIds = ['kexi-member-market-data', 'kexi-member-technical', 'kexi-member-forecaster', 'kexi-member-risk', 'kexi-member-falsifier']
-    ok(inlineMemberRows.length === 5, `主补丁应内联 5 个成员预设声明行，实际 ${inlineMemberRows.length}`)
+    // v1.9.23：成员 preset id 的权威集合来自 lib/members.mjs（唯一真源），
+    // 不在测试里再抄一份——抄一份就必然出现"表改了、断言没改"的漂移。
+    const memberPresetIds = MEMBER_PRESET_IDS
+    ok(inlineMemberRows.length === memberPresetIds.length,
+      `主补丁应内联 ${memberPresetIds.length} 个成员预设声明行，实际 ${inlineMemberRows.length}`)
     for (const row of inlineMemberRows) {
       ok(rows.indexOf(row) < rows.indexOf(preset), `${row.id} 必须排在 preset-kexi-crypto 之前（注册时序）`)
     }
@@ -138,30 +201,28 @@ if (yaml) {
       }
       ok(plugins.find((p) => p.id === 'kexi-plugin')?.name === 'dsh-kexi-crypto/kexi-plugin', 'kexi-plugin 行须用裸子路径名')
       const del = plugins.find((p) => p.id === 'delegation')
-      const members = (del?.config || []).filter((c) => c.config?.toolName && c.config.toolName !== 'subagent')
-      ok(members.length === 5, `delegation 组内应恰好 5 个角色行（v1.5.9 加证伪红队），实际 ${members.length}`)
-      // 0.2.1 契约：委派行只允许 provider/toolName/maxDepth/agentPreset 等新 schema
-      // 字段；persona/toolFilter/backgroundMode 一出现 apply 即 throw，整组预设挂死。
-      const MEMBER_PRESET_OF = {
-        'member-market-data': { tool: 'market_data_specialist', preset: 'kexi-member-market-data' },
-        'member-technical': { tool: 'technical_indicators', preset: 'kexi-member-technical' },
-        'member-forecaster': { tool: 'trend_forecaster', preset: 'kexi-member-forecaster' },
-        'member-risk': { tool: 'risk_assessor', preset: 'kexi-member-risk' },
-        'member-falsifier': { tool: 'falsification_challenger', preset: 'kexi-member-falsifier' },
-      }
-      for (const m of members) {
-        const expect = MEMBER_PRESET_OF[m.id]
-        ok(!!expect, `未登记的成员行 id: ${m.id}`)
-        if (expect) {
-          ok(m.config.toolName === expect.tool, `${m.id} toolName 应为 ${expect.tool}，实际 ${m.config.toolName}`)
-          ok(m.config.agentPreset === expect.preset, `${m.id} agentPreset 应为 ${expect.preset}，实际 ${m.config.agentPreset}`)
-        }
-        ok(m.config.maxDepth === 1, `角色 ${m.config.toolName} 应 maxDepth: 1（D9：0 会让首次委派即被拒）`)
-        for (const dead of ['persona', 'toolFilter', 'backgroundMode']) {
-          ok(!Object.hasOwn(m.config, dead), `角色 ${m.config.toolName} 仍带 0.2.1 已移除字段 ${dead}（会导致预设挂载失败）`)
-        }
-      }
-      notes.push(`plugins ${plugins.length} 行 / 成员委派 ${members.map((m) => m.config.toolName).join(', ')}`)
+      const delRows = del?.config || []
+      // v1.9.23：delegation 组只许 1 个委派工具，成员靠 allowedAgentPresets 派生
+      const delProblems = auditDelegation(delRows, memberPresetIds)
+      ok(delProblems.length === 0, `delegation 组契约不合规:\n    ${delProblems.join('\n    ')}`)
+      // 负对照（HANDOFF §6.5）：把**旧 6 行形态**喂给同一套判据，必须被判坏。
+      // 否则 auditDelegation 写错了也照样全绿，等于没有门禁。
+      const legacyDelRows = [
+        { id: 'tool-subagent', name: '@deepseek-ai/dsh-tool-subagent', config: { provider: 'spawn', toolName: 'subagent' } },
+        ...OLD_TOOL_NAMES.map((tn) => ({
+          id: `member-${tn}`, name: '@deepseek-ai/dsh-tool-subagent',
+          config: { provider: 'spawn', toolName: tn, maxDepth: 1, agentPreset: 'kexi-member-x' },
+        })),
+      ]
+      const legacyProblems = auditDelegation(legacyDelRows, memberPresetIds)
+      ok(legacyProblems.length > 0, '负对照：旧 6 行委派形态没有被判坏（门禁失去牙齿）')
+      // 成员预设声明集合必须与唯一真源**双向**一致（只加一处就红）
+      ok(inlineMemberRows.length === MEMBER_PRESET_IDS.length,
+        `成员预设声明行数(${inlineMemberRows.length}) ≠ 唯一真源(${MEMBER_PRESET_IDS.length})`)
+      const declaredIds = inlineMemberRows.map((r) => r.config?.id)
+      ok(JSON.stringify(declaredIds) === JSON.stringify(MEMBER_PRESET_IDS),
+        `成员预设声明 id/顺序与 lib/members.mjs 不一致：${JSON.stringify(declaredIds)} ≠ ${JSON.stringify(MEMBER_PRESET_IDS)}`)
+      notes.push(`plugins ${plugins.length} 行 / 委派工具 ${delRows.filter((r) => r.name === '@deepseek-ai/dsh-tool-subagent').length} 个 / 成员预设 ${memberPresetIds.length} 个`)
 
       // ── 4c. 五个成员预设的内容契约（从主补丁内联行读取）────────────────────
       for (const pid of memberPresetIds) {
@@ -184,6 +245,17 @@ if (yaml) {
         }
         // 成员不得再委派（成员预设内零 subagent 行；与主预设 maxDepth:1 双保险）
         ok(!plugIds.some((x) => /subagent|workflow/.test(x)), `成员预设 ${pid} 内不应有任何委派/工作流工具行`)
+        // v1.9.23：五个内部成员预设不再给用户选，元数据必须压缩——
+        // ① description 会被塞进 agent_preset 参数说明（`${id}: ${description}`），
+        //    必须单行且 ≤30 字，否则模型工具说明被撑爆；
+        // ② order 移到 900+，排在全部用户可选用预设之后（万一过滤失效也不抢占视线）。
+        const desc = String(row.config?.description ?? '')
+        ok(desc.length > 0 && !/[\r\n]/.test(desc), `成员预设 ${pid} description 必须是非空单行`)
+        ok(desc.length <= 30, `成员预设 ${pid} description 应 ≤30 字（实际 ${desc.length}：${desc}）`)
+        const qName = String(row.config?.name ?? '')
+        ok(qName.length > 0 && qName.length <= 20, `成员预设 ${pid} name 应 ≤20 字（实际 ${qName.length}：${qName}）`)
+        ok(qName.includes('内部'), `成员预设 ${pid} name 应标明「内部」${qName}`)
+        ok(Number(row.config?.order) >= 900, `成员预设 ${pid} order 应 ≥900（实际 ${row.config?.order}）`)
       }
 
       // ── 5a. customSkillDirs 结构形态（v1.1.0 事故：列表项 + 返回数组 → [["path"]]）──
@@ -247,7 +319,12 @@ if (yaml) {
     notes.push(`!!js 标量 ${jsOk}/${jsScalars.length} 可求值（含 profile 根 baseUrl 场景）`)
   }
 } else {
-  notes.push('警告: 未找到 js-yaml，跳过 patch YAML 结构校验（可设 DSH_BACKEND 环境变量）')
+  // v1.9.23（体检 P0-2）：取不到 js-yaml 时**绝不能 PASS**。这里原本是 notes.push，
+  // 结果 `DSH_BACKEND=不存在` 也能打印「verify: PASS」——整块 patch 契约校验（含
+  // v1.9.21 事故的全部防线）被静默放空 24 处 ok()，是最危险的一类假绿。
+  // patch 结构是本文件的核心检查项，缺依赖等于检查没跑：必须红。
+  problems.push('未找到 js-yaml（patch YAML 结构校验无法执行）——请设 DSH_BACKEND 指向 DSH 后端目录；'
+    + '此项缺失会导致 24 处契约断言被静默跳过，禁止放行')
 }
 
 // ── 6. 实时可视化 / CLI 编排 / 设置面板 接线检查（v1.2.0）───────────────────
@@ -355,13 +432,25 @@ if (yaml) {
   ok(/zhengfu=证伪|zhengfu\(证伪/.test(pluginSrc), 'kexi_ensure_team 指引缺证伪代号（send_message target 必须用代号）')
   // 红队必须最后派：他要攻击前面三位的结论，前提是他们已出结论
   ok(/证伪必须最后派|zhengfu\(证伪/.test(pluginSrc), '缺「证伪最后派」编排次序铁律')
-  // 名册/映射必须五处同步，否则证伪在面板上显示不出中文名
-  for (const [label, src] of [['host MEMBER_CN', hostSrc], ['host 委派映射', hostSrc], ['client TEAM', clientSrc]]) {
-    ok(/falsification_challenger/.test(src), `${label} 缺 falsification_challenger（证伪无法在 UI 显示为中文名）`)
+  // 名册/映射必须由 preset id 数据驱动（v1.9.23）。旧断言逐个检查工具名——那正是
+  // 本轮要消灭的硬编码：单委派工具后工具名恒为 subagent，只有 preset id 能区分成员。
+  ok(/from '\.\/members\.mjs'/.test(hostSrc), 'host 未引用 lib/members.mjs（成员身份唯一真源被绕过）')
+  ok(/memberOfPreset\(/.test(hostSrc), 'host 未用 memberOfPreset 解析成员身份（会退回工具名/文本嗅探）')
+  ok(/installPresetRosterFilter\(/.test(hostSrc), 'host 未安装 roster 过滤器（内部成员预设会出现在 GUI 选择器）')
+  ok(/export const inject = \['agentPresets'\]/.test(hostSrc), 'host inject 应声明 agentPresets（设计 B 的前置依赖）')
+  for (const tn of OLD_TOOL_NAMES) {
+    ok(!hostSrc.includes(tn), `host 仍残留旧委派工具名 ${tn}（收敛后它是无效身份信号）`)
+    ok(!clientSrc.includes(tn), `client 仍残留旧委派工具名 ${tn}`)
+    ok(!pluginSrc.includes(tn), `preset 插件仍残留旧委派工具名 ${tn}`)
   }
-  ok(/zhengfu: '证伪'|"zhengfu"/.test(hostSrc + clientSrc), '名册缺 zhengfu 键（证伪不会出现在团队面板）')
-  ok(/member-falsifier/.test(patchText) && /falsification_challenger/.test(patchText),
-    'cordis.patch.yml 缺 member-falsifier 委派行（按需委派通道拿不到证伪）')
+  // client 名册必须以 preset id 为匹配键，且与唯一真源一一对应
+  for (const m of KEXI_MEMBERS) {
+    ok(clientSrc.includes(`preset: "${m.preset}"`), `client 名册缺成员 preset ${m.preset}`)
+    ok(clientSrc.includes(`cn: "${m.cn}"`), `client 名册缺成员中文名 ${m.cn}`)
+    ok(patchText.includes(m.preset), `cordis.patch.yml 缺成员预设 ${m.preset} 的声明/引用`)
+  }
+  ok(/zhengfu/.test(hostSrc) || /zhengfu/.test(clientSrc), '名册缺 zhengfu 键（证伪不会出现在团队面板）')
+  ok(/kexi-member-falsifier/.test(patchText), 'cordis.patch.yml 缺 kexi-member-falsifier（按需委派通道拿不到证伪）')
   // spawn 为 continuable（fresh + provider spawn）才能显示在原生面板且可续跑
   ok(/provider:\s*'spawn'/.test(pluginSrc) && /context:\s*'fresh'/.test(pluginSrc), '持久成员未按 fresh + provider spawn 创建（否则不显示/不可续跑）')
   // 幂等：创建前先 listMembers 跳过已存在，避免每次会话重复 spawn
@@ -385,17 +474,29 @@ if (yaml) {
 
   // v1.3.0：③ 团队名册面板（四位成员 + 谁在干活）
   ok(/function TeamRoster/.test(clientSrc), 'client 缺团队名册 TeamRoster')
-  // 把检查限定在 TEAM 定义块内，逐个核对四位成员工具名（不假定彼此间隔字符数）。
+  // 把检查限定在 TEAM 定义块内，逐个核对**成员 preset id**（v1.9.23：
+  // 工具名不再承载身份；这里断言名册与唯一真源一一对应）。
   const teamBlock = (clientSrc.match(/const TEAM = \[([\s\S]*?)\]\s*;/) || [])[1] || ''
-  for (const tn of ['market_data_specialist', 'technical_indicators', 'trend_forecaster',
-                     'risk_assessor', 'falsification_challenger']) {
-    ok(teamBlock.includes(tn), `团队名册 TEAM 缺成员 ${tn}`)
+  for (const m of KEXI_MEMBERS) {
+    ok(new RegExp(`preset:\\s*"${m.preset}"`).test(teamBlock), `团队名册 TEAM 缺成员 ${m.preset}`)
+    ok(new RegExp(`key:\\s*"${m.key}"`).test(teamBlock), `团队名册 TEAM 缺成员代号 ${m.key}`)
   }
+  // 负对照：从名册块里删掉一行后，上面这套判据必须报错（证明它真的在检查内容）
+  const prunedTeam = teamBlock.replace(/\{[^{}]*kexi-member-risk[^{}]*\},?/, '')
+  ok(prunedTeam !== teamBlock && KEXI_MEMBERS.some((m) => !prunedTeam.includes(m.preset)),
+    '负对照：名册删行后判据未失效检查（TEAM 正则或断言失效）')
 
   // v1.3.0：④ host 工作目录从 session.header.cwd 读（dsh-session 无 get cwd()）
   ok(/function sessionCwd/.test(hostSrc) && /header[^;]{0,30}\.cwd/.test(hostSrc), 'host 缺 sessionCwd（工作目录在 header.cwd，直接读 session.cwd 恒为空）')
-  // subagent 事件真实签名是 (identity, parent) 两个参数
-  ok(/ctx\.on\(\s*['"]subagent\/start['"]\s*,\s*\(\s*identityOrPayload\s*,\s*parent\s*\)/.test(hostSrc), 'subagent/start 处理未按真实 (identity, parent) 双参数签名')
+  // v1.9.23（体检 P1-5）：subagent 事件的**第二个参数收不到实参**——上游 lifecycle
+  // 只调 callback(info)，cordis dispatch 把 args[1] 剥成 thisArg。旧断言要求写成
+  // `(identityOrPayload, parent)` 双参，等于把错误假设钉成契约。现在要求：
+  //   · 不再从 parent 形参取父会话；
+  //   · 父会话改由子会话 header.parentSession 反查（rememberChildParent/subagentHome）。
+  ok(/ctx\.on\(\s*['"]subagent\/start['"]\s*,\s*\(\s*identityOrPayload\s*\)/.test(hostSrc),
+    'subagent/start 处理仍按双参签名取 parent（该实参永远为空，节点会落进成员自己的桶）')
+  ok(/function subagentHome/.test(hostSrc) && /function rememberChildParent/.test(hostSrc),
+    'host 未按子会话 header.parentSession 反查父会话（成员启动/结束节点会写错桶）')
   ok(clientSrc.includes('autoCliCrosscheck'), '设置面板缺 autoCliCrosscheck 开关')
   // 关键兼容约束：本机 DSH 已移除 client settingsScope，强注入会白屏
   ok(/exports\.inject\s*=\s*\[\s*["']slots["']\s*\]/.test(clientSrc), 'client inject 必须恰好是 ["slots"]（注入 settingsScope 会导致本机 DSH 白屏）')
@@ -405,12 +506,12 @@ if (yaml) {
   // 主理人 depth=0 派成员 childDepth=1：maxDepth:0 → 连第一次委派都被拒
   // （"subagent depth 1 exceeds maxDepth 0"，四位成员全部不可用）；
   // maxDepth:1 → 成员可被派、成员再派时 childDepth=2>1 被拦（原意保住）。
-  // 只认值位置的 maxDepth 行（注释里的 "maxDepth 0" 是历史教训记录，不算）。
+  // v1.9.23：只剩 1 个委派行，所以只该有 1 个值位置 maxDepth（注释里的历史记录不算）。
   const memberDepths = patchText.split('\n')
     .map((l) => l.match(/^\s*maxDepth:\s*(\d+|provider-managed)\s*$/))
     .filter(Boolean).map((m) => m[1])
-  ok(memberDepths.length === 5, `成员行应有 5 个 maxDepth（实际 ${memberDepths.length}）`)
-  ok(memberDepths.every((v) => v === '1'), `成员 maxDepth 必须=1（实际 [${memberDepths.join(', ')}]）——0 会让首次委派即被拒（D9）`)
+  ok(memberDepths.length === 1, `委派行应恰好 1 个 maxDepth（实际 ${memberDepths.length}：${memberDepths.join(', ')}）`)
+  ok(memberDepths.every((v) => v === '1'), `委派 maxDepth 必须=1（实际 [${memberDepths.join(', ')}]）——0 会让首次委派即被拒（D9）`)
 
   // D10 防回归：CLI 成功文本字段是 response（三家桥 buildResult 均如此），
   // 必须在提取链最前面；漏了它会退成存整个 JSON、agreement 永远 unclear。

@@ -1,0 +1,8 @@
+Get-ExecutionPolicy : The 'Get-ExecutionPolicy' command was found in the module 'Microsoft.PowerShell.Security', but th
+e module could not be loaded. For more information, run 'Import-Module Microsoft.PowerShell.Security'.
+At C:\Users\lcl\Desktop\DSH插件开发\K析研判团\logs\build\_tmp\envprobe.ps1:4 char:18
++ 'EXECPOLICY=' + (Get-ExecutionPolicy).ToString()
++                  ~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (Get-ExecutionPolicy:String) [], CommandNotFoundException
+    + FullyQualifiedErrorId : CouldNotAutoloadMatchingModule
+ 

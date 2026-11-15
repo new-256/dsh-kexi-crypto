@@ -40,8 +40,15 @@ head('[A] host 活动流与设置端点')
 const handlers = new Map()
 const routes = new Map()
 const fakeWs = { register: (r) => { routes.set(r.path, r); return () => routes.delete(r.path) } }
+// v1.9.23：host 声明 inject=['agentPresets'] 并包裹其 remoteExportList（设计 B）。
+// 夹具必须提供这个服务，否则插件 apply 会按设计**当场抛错**（fail-loud 是特性不是 bug）。
+const fakePresets = {
+  async list() { return [] },
+  async remoteExportList() { return { presets: [{ id: 'standard', isDefault: true }, { id: 'kexi-crypto', isDefault: false }] } },
+}
 const fakeCtx = {
   on(name, fn) { if (!handlers.has(name)) handlers.set(name, []); handlers.get(name).push(fn); return () => { } },
+  get(name) { return name === 'agentPresets' ? fakePresets : undefined },
   inject(_deps, cb) { cb({ get: (n) => (n === 'webServer' ? fakeWs : undefined), effect: (fn) => { const d = fn(); return typeof d === 'function' ? d : () => { } } }) },
   effect(fn) { const d = fn(); return typeof d === 'function' ? d : () => { } },
 }
@@ -150,10 +157,45 @@ ok(s0.nodes.some((n) => n.tool === 'kexi_run'), '时间线仍保留 kexi 工具�
 // 研判到一半模型在思考时（step/start 无 step/end）卡片不能一片空白。
 ok(s0.current && typeof s0.current.label === 'string', 'current 汇报"当前在干什么"')
 
-emit('subagent/start', { agentType: 'technical_indicators', cwd: 'C:/work/kexi-demo', parentSessionId: 'sess-1', description: '算指标' })
-emit('subagent/end', { cwd: 'C:/work/kexi-demo', parentSessionId: 'sess-1', status: 'ok' })
+// ── v1.9.23：成员身份改由**子会话 preset** 决定（单委派工具后没有工具名可看）──
+// 旧用例用 identity.agentType='technical_indicators' 造假事件——真实事件里
+// identity 只有 {runId, provider, id, local}（dsh-subagent types L187-193），
+// 所以那条断言是"守着已废弃的身份通道照样绿"。现改为真实信号：
+//   ① agent-preset/selected（注册表转发的 app 级事件，sessionId=子会话 id）
+//   ② session.header.agentPreset（子会话 header，创建时写入）
+const childTech = 'child-run-tech-1'
+// ⚠ v1.9.23（体检 P1-5）：subagent/start 的第二个实参永远是空的（上游只 callback(info)），
+// 父会话必须从**子会话 header.parentSession** 反查。这里按真实形状先发子会话事件。
+emit('session/event', { id: childTech, header: { origin: 'subagent', agentPreset: 'kexi-member-technical', parentSession: 'sess-1', cwd: 'C:/work/kexi-demo' } }, { type: 'turn/start', data: {} })
+emit('agent-preset/selected', childTech, 'kexi-member-technical')
+emit('subagent/start', { runId: 'run-tech-1', provider: 'spawn', id: childTech, local: true })
+emit('subagent/end', { id: childTech, provider: 'spawn', local: true, stopReason: 'completed' })
 r = await callRoute('/kexi-dashboard/activity')
-ok(r.json.sessions.some((s) => s.nodes.some((n) => n.kind === 'subagent' && /指北/.test(n.label))), 'subagent 映射出成员中文名（谁在干活）')
+const parentBucket = r.json.sessions.find((s) => s.id === 'sess-1')
+ok(!!parentBucket && parentBucket.nodes.some((n) => n.kind === 'subagent' && /委派成员 指北·技术指标/.test(n.label)),
+  'subagent/start 按子会话 preset 映射出成员中文名（agent_preset= 新链路）')
+ok(!!parentBucket && parentBucket.nodes.some((n) => n.kind === 'subagent_end'),
+  'subagent 节点落在**父会话**桶（P1-5：parent 实参不可靠，靠 header.parentSession 反查）')
+ok(!r.json.sessions.some((s) => s.id === childTech && s.nodes.some((n) => n.kind === 'subagent')),
+  '成员启动/结束节点没有写进成员自己的桶（旧实现的症状）')
+
+// 身份**晚到**（subagent/start 先到、映射后到）→ 必须回填 label + icon + member，
+// 而不是永远停在"身份未识别"。三个字段同时断言，防止只改文字不改图标。
+const childLate = 'child-run-late-1'
+emit('subagent/start', { runId: 'run-late-1', provider: 'spawn', id: childLate, local: true, description: '晚到身份' })
+r = await callRoute('/kexi-dashboard/activity')
+const lateBefore = r.json.sessions.flatMap((s) => s.nodes).find((n) => n.kind === 'subagent' && /身份未识别/.test(n.label))
+ok(!!lateBefore, '映射未到时显式标「身份未识别」（不静默套通用成员标签）')
+ok(lateBefore && lateBefore.unknownIdentity === true, '未识别节点带 unknownIdentity 标记（可供回填定位）')
+// 走 header 来源（第二个身份信号）：child 会话第一条事件就会登记身份 + 父会话
+emit('session/event', { id: childLate, header: { origin: 'subagent', agentPreset: 'kexi-member-risk', parentSession: 'sess-1', cwd: 'C:/work/kexi-demo' } }, { type: 'turn/start', data: {} })
+r = await callRoute('/kexi-dashboard/activity')
+const lateAfter = r.json.sessions.flatMap((s) => s.nodes).find((n) => n.kind === 'subagent' && /委派成员 守拙/.test(n.label))
+ok(!!lateAfter, '身份到达后回填 label（守拙·风险定级）')
+ok(lateAfter && lateAfter.icon === '👤', '回填同时修正 icon（👤 而不是临时图标 🧑‍🔬）')
+ok(lateAfter && lateAfter.member === 'shouzhuo' && lateAfter.agentPreset === 'kexi-member-risk',
+  '回填同时写入 member/agentPreset（卡片与关系图不用再反推）')
+ok(lateAfter && !lateAfter.unknownIdentity, '回填后清掉 unknownIdentity 标记')
 
 head('[A2] turn/step 生命周期关闭（防节点永久 running / 会话永久 busy）')
 
@@ -487,6 +529,63 @@ ok(tSess.nodes.some((n) => n.tool === 'send_message' && /派活给 数脉/.test(
   'arguments 为 JSON 字符串时也能解析（派活给 数脉）')
 ok(tSess.nodes.some((n) => n.tool === 'kexi_run' && /BTCUSDT/.test(n.label)),
   'kexi_run 标签带出币种（字符串参数同样解析）')
+
+// ── A6-1b（v1.9.23）：`subagent` 的 agent_preset 四态 ────────────────────────
+// 6 个委派工具收敛成 1 个后，成员身份只能从 arguments.agent_preset 派生；
+// 而 arguments 在真实事件里是 **JSON 字符串**（HANDOFF §6.1），所以下面四态
+// 全部用字符串注入（对象形态由 A6-1 的 send_message/kexi_run 覆盖）。
+// 这套文案由回归团写死断言：正常 / 坏 JSON / 缺 preset / 未知 preset。
+const subSess = { id: 'sess-sub', cwd: 'C:/work/sub-demo', header: { cwd: 'C:/work/sub-demo', agentPreset: 'kexi-crypto' } }
+// 先点亮会话（否则纯 subagent 会话本身不属于 kexi 活动，整会话不会出现在卡片里）
+emit('session/event', subSess, { type: 'tool/call', data: { callId: 'sk0', name: 'kexi_run', arguments: '{"mode":"fast","symbol":"ETHUSDT"}' } })
+emit('session/event', subSess, toolResult('sk0', { ok: true }))
+const subCall = (callId, rawArgs) => emit('session/event', subSess, { type: 'tool/call', data: { turn: 1, step: 2, callId, name: 'subagent', arguments: rawArgs } })
+subCall('sc1', '{"description":"算指标","prompt":"算","agent_preset":"kexi-member-technical"}')
+subCall('sc2', '{"description":"坏参数","prompt":"x"')                       // 坏 JSON（故意缺右括号）
+subCall('sc3', '{"description":"自查","prompt":"复核一下"}')                  // 合法但没传 preset
+subCall('sc4', '{"description":"幽灵","prompt":"x","agent_preset":"kexi-member-ghost"}') // 未知 preset
+r = await callRoute('/kexi-dashboard/activity')
+const subNodes = r.json.sessions.find((s) => s.id === 'sess-sub')?.nodes || []
+const subByCall = (id) => subNodes.find((n) => n.callId === id)
+const n1 = subByCall('sc1'); const n2 = subByCall('sc2'); const n3 = subByCall('sc3'); const n4 = subByCall('sc4')
+ok(!!n1 && n1.label === '委派 指北·技术指标', `正常态 label = 委派 指北·技术指标（实际 ${n1?.label}）`)
+ok(!!n1 && n1.member === 'zhibei' && n1.agentPreset === 'kexi-member-technical', '正常态带出 member/agentPreset（供名册与关系图）')
+ok(!!n2 && /参数解析失败/.test(n2.label), `坏 JSON → label 含「参数解析失败」（实际 ${n2?.label}）`)
+ok(!!n2 && /坏参数|\{"description"/.test(String(n2.detail || '')), '坏 JSON → detail 回显原始 args')
+ok(!!n3 && /继承主理人预设/.test(n3.label), `缺 agent_preset → label 含「继承主理人预设」（实际 ${n3?.label}）`)
+ok(!!n4 && /未知预设/.test(n4.label) && /kexi-member-ghost/.test(String(n4.detail || '')),
+  `未知 preset → label 含「未知预设」且 detail 回显 id（实际 ${n4?.label} / ${n4?.detail}）`)
+ok(subNodes.filter((n) => n.tool === 'subagent').length === 4, '4 次 subagent 调用都进了活动流（JSON 字符串 args 全解析）')
+
+// 判据边界：`subagent` 是通用工具名，别的预设的普通委派不该被点亮成研判活动。
+const plainSess = { id: 'sess-plain', cwd: 'C:/work/plain', header: { cwd: 'C:/work/plain', agentPreset: 'standard' } }
+emit('session/event', plainSess, { type: 'tool/call', data: { callId: 'p0', name: 'kexi_run', arguments: '{"mode":"fast","symbol":"BTCUSDT"}' } })
+emit('session/event', plainSess, toolResult('p0', { ok: true }))
+emit('session/event', plainSess, { type: 'tool/call', data: { callId: 'p1', name: 'subagent', arguments: '{"description":"通用子代理"}' } })
+r = await callRoute('/kexi-dashboard/activity')
+const plainNodes = r.json.sessions.find((s) => s.id === 'sess-plain')?.nodes || []
+ok(!plainNodes.some((n) => n.tool === 'subagent'),
+  '非本团队预设会话的 subagent 调用不算 kexi 活动（工具名不是判据，preset 才是）')
+
+// ── A6-1c（v1.9.23）：持久团队 members 的中文标签两种时序都要成立 ──────────
+// catalog 不再嗅探 label 文本，持久成员（继承 kexi-crypto）的 childId → 中文名
+// 由 team/member 事件写入。两条路径先后顺序不能决定结果。
+const teamOrder = { id: 'sess-team-order', cwd: 'C:/work/team-order', header: { cwd: 'C:/work/team-order', agentPreset: 'kexi-crypto' } }
+emit('session/event', teamOrder, { type: 'tool/call', data: { callId: 't0', name: 'kexi_run', arguments: '{"mode":"fast","symbol":"BTCUSDT"}' } })
+emit('session/event', teamOrder, toolResult('t0', { ok: true }))
+// 时序一：team/member 先到，catalog 后到
+emit('session/event', teamOrder, { type: 'team/member', data: { version: 2, member: { id: 'child-A', name: 'shuma', description: '数脉', phase: 'active' } } })
+emit('session/event', teamOrder, { type: 'subagent/catalog', data: { version: 0, childId: 'child-A', mode: 'continuable', label: '拉取BTC日线（模型自由文本）' } })
+// 时序二：catalog 先到（此时还没有成员映射），team/member 后到
+emit('session/event', teamOrder, { type: 'subagent/catalog', data: { version: 0, childId: 'child-B', mode: 'continuable', label: '随便写的标签' } })
+emit('session/event', teamOrder, { type: 'team/member', data: { version: 2, member: { id: 'child-B', name: 'zhibei', description: '指北', phase: 'active' } } })
+r = await callRoute('/kexi-dashboard/activity')
+const toSess = r.json.sessions.find((s) => s.id === 'sess-team-order')
+const teamNames = Object.values(toSess?.team?.members || {}).map((m) => m.cn)
+ok(teamNames.includes('数脉') && teamNames.includes('指北'), `持久成员在名册里显示中文名（实际 ${teamNames.join(',')}）`)
+// 自由文本标签不得被当成员名：session 的 memberIds 里不许出现模型写的描述
+const memberIds = JSON.stringify(toSess?.team?.members || {})
+ok(!/拉取BTC日线|随便写的标签/.test(memberIds), 'subagent/catalog 不再把 label 自由文本当成员名')
 
 // A6-2：等待成员期间（wait_agent 静默期）不能显示"空闲"。
 // 真实参数：wait_agent timeout_ms=600000（10 分钟），期间无任何 session 事件。

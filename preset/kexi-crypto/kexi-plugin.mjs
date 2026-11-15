@@ -1085,7 +1085,9 @@ export function apply(ctx) {
         digest: digest + xchkLine + teamNote,
         out_files: dr.r.ok ? [report, dash, ...(latestFile ? [latestFile] : [])] : [report],
         next: dr.r.ok
-          ? '研判已落盘。深度研判请委派 trend_forecaster/risk_assessor 覆写 trend/risk 后重跑 kexi_dashboard；用 present 交付看板。'
+          // v1.9.23：6 个委派工具收敛为 1 个 `subagent`，成员用 agent_preset 参数选择
+          // （kexi-member-*）；工具名不再能当身份信号，文案里也不再提旧工具名。
+          ? '研判已落盘。深度研判请用 subagent 委派成员（agent_preset=kexi-member-forecaster 覆写 trend、kexi-member-risk 覆写 risk，或 kexi-member-falsifier 做红队）后重跑 kexi_dashboard；用 present 交付看板。'
           : `看板渲染失败（报告本身可用）：${clip(dr.r.error, 200)}；可单独重试 kexi_dashboard。`,
       }
     })

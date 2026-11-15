@@ -1,0 +1,57 @@
+[bot-gateway:plugin] [INFO] 正在挂载 DSH Bot Gateway 插件 (v0.3.11-beta)...
+[bot-gateway:plugin] [INFO] webServer 服务就绪，挂载 /bot-gateway/ 路由看板
+[bot-gateway:settings] [INFO] 已成功载入设置文件: C:\Users\lcl\AppData\Roaming\DSH Desktop\dsh-home\bot-gateway\settings.json
+[bot-gateway:plugin] [INFO] 正在实例化与构建 Gateway 核心...
+[bot-gateway:core] [INFO] 已载入历史持久化状态: 4 个 Chat, 16 个 Task
+[bot-gateway:users] [INFO] 用户档案载入：5 个用户
+[bot-gateway:screen-watch] [INFO] [screen-watch] 启动基线: 60 张已有截图不推送
+[bot-gateway:screen-watch] [INFO] [screen-watch] 捕获进程已启动: pid=27920 interval=598s outDir=C:\Users\lcl\AppData\Roaming\DSH Desktop\dsh-home\bot-gateway\screen-shots
+[bot-gateway:core] [INFO] Gateway 核心逻辑已初始化完成
+[bot-gateway:qqofficial] [INFO] 状态变更为: starting (连接中...)
+[bot-gateway:telegram] [INFO] 状态变更为: disabled (未启用)
+[bot-gateway:feishu] [INFO] 状态变更为: starting (连接中...)
+[bot-gateway:screen-watch] [WARN] [screen-watch][capture] [desktop-capture] ready dir=C:\Users\lcl\AppData\Roaming\DSH Desktop\dsh-home\bot-gateway\screen-shots interval=598
+[bot-gateway:screen-watch] [WARN] [screen-watch][capture] [27920:1030/013116.358:ERROR:net\base\network_change_notifier_win.cc:213] WSALookupServiceBegin failed with: 10108
+[bot-gateway:dingtalk] [INFO] 状态变更为: disabled (未启用)
+[bot-gateway:plugin] [INFO] DSH Bot Gateway 插件启动完毕 (5 平台 + NapCat 托管 + Settings 热生效)
+[bot-gateway:napcat-proc] [INFO] WSL 发行版 napcat-dsh 内 NapCat 已在运行中
+[bot-gateway:plugin] [INFO] [wsl] 绕过 localhost 中继直连: ws://127.0.0.1:3001 → ws://172.19.110.60:3001
+[bot-gateway:onebot11] [INFO] 状态变更为: starting (连接中 ws://172.19.110.60:3001?access_token=f94ba3901f8445118c2bb0f2be02c8df)
+[bot-gateway:onebot11] [INFO] 状态变更为: connected (已连接到 NapCat/OneBot (ws://172.19.110.60:3001?access_token=f94ba3901f8445118c2bb0f2be02c8df))
+[bot-gateway:onebot11] [INFO] 自动学习获得机器人 selfId: 1284433843
+[bot-gateway:onebot11] [INFO] API 获取 selfId: 1284433843
+[bot-gateway:qqofficial] [INFO] WebSocket 物理连接建立成功
+[bot-gateway:qqofficial] [INFO] 收到 HELLO 帧，心跳间隔: 41250ms
+[bot-gateway:qqofficial] [INFO] 正在向 QQ 官方获取 AccessToken...
+[bot-gateway:feishu] [INFO] 状态变更为: connected (已建立飞书长连接)
+dsh inspector: devtools://devtools/bundled/devtools_app.html?ws=127.0.0.1:9231/devtools/page/4916165f-c966-43a2-9b52-a135a7505e63&panel=elements&noJavaScriptCompletion=true
+[bot-gateway:qqofficial] [INFO] 获取 AccessToken 成功
+[bot-gateway:qqofficial] [INFO] 状态变更为: connected (已连接至 QQ 官方 Gateway)
+dsh web: http://127.0.0.1:3080/?token=WTeieq7rJpHT0csEIYKf_g18yXXmx9S7uVavrx7C58I
+[bot-gateway:screen-watch] [WARN] [screen-watch][capture] [desktop-capture] saved 20261030-013117.png
+[bot-gateway:onebot11] [INFO] 自动学习获得机器人 selfId: 1284433843
+✓ clean kexi-crypto (K析研判团)
+✓ clean kexi-member-market-data (K析成员·数脉（内部预设·勿直接选择）)
+✓ clean kexi-member-technical (K析成员·指北（内部预设·勿直接选择）)
+✓ clean kexi-member-forecaster (K析成员·望潮（内部预设·勿直接选择）)
+✓ clean kexi-member-risk (K析成员·守拙（内部预设·勿直接选择）)
+✓ clean kexi-member-falsifier (K析成员·证伪（内部预设·勿直接选择）)
+✓ resolve kexi-crypto → 定义可取
+✓ resolve kexi-member-market-data → 定义可取
+✓ resolve kexi-member-technical → 定义可取
+✓ resolve kexi-member-forecaster → 定义可取
+✓ resolve kexi-member-risk → 定义可取
+✓ resolve kexi-member-falsifier → 定义可取
+
+PRESET-MOUNT: PASS
+[bot-gateway:plugin] [INFO] 清理 bot-gateway 插件句柄、适配器与 NapCat 托管进程...
+[bot-gateway:plugin] [INFO] 正在卸载 Gateway 与停止所有 5 大平台适配器...
+[bot-gateway:onebot11] [INFO] 状态变更为: disabled (已停止)
+[bot-gateway:qqofficial] [INFO] 状态变更为: disabled (已停止)
+[bot-gateway:telegram] [INFO] 状态变更为: disabled (已停止)
+[bot-gateway:feishu] [INFO] 状态变更为: disabled (已停止)
+[bot-gateway:dingtalk] [INFO] 状态变更为: disabled (已停止)
+[bot-gateway:core] [INFO] 开始清理 Gateway 资源...
+[bot-gateway:screen-watch] [INFO] [screen-watch] 已停止
+[bot-gateway:core] [INFO] Gateway 资源清理完成
+[bot-gateway:napcat-proc] [INFO] 正在销毁 NapCatProcessManager...

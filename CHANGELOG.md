@@ -1,5 +1,132 @@
 # 更新日志 · CHANGELOG
 
+## v1.9.24（2026-11-15）— DSH 0.2.2 适配：删除失效的 list-agents 子路径行（GUI「加载失败」真因）
+
+依据：`logs/debug/20261115-v1924-list-agents-load-failure.md`（复现、取证、处置）。
+
+### 现象
+
+DSH 0.2.2-rc.3（2026-11-13 由 0.2.1-alpha.5 升级）启动后，`dsh-kexi-crypto`
+在 GUI 显示「加载失败」。
+
+### 根因
+
+`home-plugin/dsh-kexi-crypto/cordis.patch.yml` 的 `delegation` 组声明了
+`tool-subagent-list-agents`（`@deepseek-ai/dsh-tool-subagent-control/list-agents`）。
+该子路径导出在 DSH 0.2.2-rc.3 已不存在（exports 仅剩 `.` / `./src/*` /
+`./package.json` / `./locale/*.json`），cordis loader 报
+`tool-subagent-list-agents ... never started`，整个 `kexi-crypto` 预设被判
+BROKEN → GUI「加载失败」。`scripts/check-preset-mount.mjs` 实测复现：
+「✗ BROKEN kexi-crypto」+「mount(kexi-crypto) 抛错」+「真调用 mount() 次数应为 2，实际 1」，其余断言全绿。
+
+### 修复
+
+- 删除 `delegation` 组中的 `tool-subagent-list-agents` 行。
+  DSH 0.2.2 起 `dsh-tool-subagent-control` 主入口（`src/index.ts`）已统一注册全部四个工具
+  （`send_message` / `interrupt_agent` / `wait_agent` / `list_agents`），
+  `list_agents` 功能由上方 `tool-subagent-control` 行覆盖，该子路径行纯属失效冗余。
+- 版本 `1.9.23` → `1.9.24`（package.json / CHANGELOG / README / HANDOFF 四处一致）。
+- 未触碰已安装副本、`deps/`、`dist/`。
+
+## v1.9.23（2026-10-30）— 委派工具面收敛（6→1）+ 内部成员预设对用户隐藏
+
+依据：`docs/repair-plan-v1.9.23.md`（含上游逐条取证与真机探针原文）、
+`docs/repair-result-v1.9.23.md`（门禁输出与审计存档）。
+
+### 1. 六个委派工具收敛为一个 `subagent`
+
+`delegation` 组原来是「通用 subagent + 5 个 `toolName=market_data_specialist` 等角色行」。
+模型每次派活要在 6 个语义重叠的工具里挑，更麻烦的是**工具名被当成成员身份**——
+host 的活动流映射、client 名册、脚本断言全都钉在工具名上。
+
+现改为单行：`toolName: subagent` + `allowedAgentPresets`（5 个 `kexi-member-*`）。
+上游 `dsh-tool-subagent@0.2.1-alpha.5` 会据此派生带**枚举**的 `agent_preset` 参数
+（Config L311-322、schema 派生 L400-404、参数说明取预设 description L227-237、
+取值校验 L250-256），身份从此只由 preset id 表达。
+
+### 2. 成员身份改为数据驱动（唯一真源 `lib/members.mjs`）
+
+新增 `home-plugin/dsh-kexi-crypto/lib/members.mjs`：`preset id → 代号/中文名/角色`。
+host 活动流、client 名册、门禁脚本三方引用同一张表；`verify.mjs` 做**双向集合断言**
+（members.mjs ↔ patch `allowedAgentPresets` ↔ 五个声明行 ↔ client TEAM），
+任何一处加/删成员而其余没跟上，门禁立刻红。
+
+运行时身份来自子会话的 preset（两条来源任一先到即可）：
+`session.header.agentPreset` 与注册表转发的 `agent-preset/selected` 事件。
+**拿不到身份时显式标注「身份未识别」**，映射到达后回填 label + icon + member
+（旧实现 `label.split(' ')[0]` 会把模型写的自由文本第一段当成员名，已删除）。
+
+### 3. 内部成员预设不出现在「智能体预设」选择器
+
+`dsh-agent-preset` 的 Config 没有 `hidden` 字段，GUI `presetOptions()` 只过滤 broken。
+故改为 host 侧包裹 `agentPresets.remoteExportList`（浏览器 roster 的唯一实现，
+typert 端点 `agentPresets/list` → `implementation: 'remoteExportList'`）：
+
+- 只在**实例**上遮蔽这一个方法（own property 遮蔽原型方法）；
+- 返回**新对象**，不原地改宿主缓存；
+- `list()` / `readDocument()` / `resolve()` / `mount()` / `select()` 一律不动
+  （成员预设仍必须能被委派行引用与挂载——把过滤下沉到 `list()` 会直接打断委派）；
+- 服务缺失、方法形状不符、返回值缺 `presets`、roster 行缺字符串 id、重复安装、
+  卸载时发现方法被替换——**全部当场抛错**，绝不静默放行；
+- dispose 用 `getOwnPropertyDescriptor` 比较原始值（普通属性访问经过作用域代理，
+  拿到的是每次新建的绑定函数，比身份会误判成"被替换"）。
+
+真机取证（真实 `runProfile` 引导 + 网关同款作用域取方法）：浏览器路径 roster **15 → 10 行**，
+恰好去掉 5 个 `kexi-member-*`，`standard`/`kexi-crypto` 等 10 个与相对顺序不变，
+`isDefault` 保留；内部 `list()` 仍 15 行；dispose 可逆。取证脚本在 `tools/preset-probe/`
+（`tools/` 不进包）。
+
+### 4. 顺带修掉的两个"测试全绿而线上失效"
+
+- **`subagent/start` 的 `parent` 实参永远为空**（上游 lifecycle 只 `callback(info)`），
+  旧代码据此取父会话 id → 节点回落到成员自己的 session id，被写进**成员自己的桶**，
+  主理人卡片根本看不到"谁开始干活"。现改用子会话 `header.parentSession` 反查。
+- **`verify.mjs` 取不到 js-yaml 时整块 patch 契约校验被静默跳过还打印 PASS**
+  （`notes.push` → `problems.push`）；这条不修，本轮所有 verify PASS 都是假绿。
+
+### 5. 门禁
+
+- `verify.mjs`：delegation 单行契约 + 双向集合断言 + 五个成员预设元数据压缩断言
+  + 「旧 6 行形态必须被判坏」负对照；
+- `test-preset-contract.mjs`：对**真实安装包** `Config` 校验新单行，
+  三条负对照（旧 6 行 / 幽灵预设 / 漏成员）；
+- `test-preset-roster.mjs`（新）：上游映射仍在 + 过滤语义 + 5 条负对照 + 可逆还原；
+- `test-runtime.mjs`：旧 `agentType` 假身份用例改为 `agent_preset` 新链路；
+  新增 `subagent` 的 args 四态（正常 / 坏 JSON / 缺 preset / 未知 preset，
+  全部以 **JSON 字符串**注入）+ 身份晚到回填 + 持久成员两种时序；
+- `check-preset-mount.mjs`：断言本插件真的激活（roster 过滤器已装）、
+  浏览器 roster 已隐藏、内部 list/readDocument 完整、委派行恰好 1 个。
+
+### 6. 破坏性变更
+
+旧工具名 `market_data_specialist` / `technical_indicators` / `trend_forecaster` /
+`risk_assessor` / `falsification_challenger` **全部废除**，任何外部脚本/提示词
+引用它们都会失效；等价的调用是 `subagent(agent_preset=kexi-member-…)`。
+持久团队编排（`kexi_ensure_team` / `send_message`）、实盘链路、Python 脚本链未改动。
+
+## v1.9.22（2026-10-18）— 跟踪 459 事件全会话：修 7 项数据正确性与编排缺陷 + 独立数值复核入口
+
+依据：`docs/diagnosis-session-44da005c.md`、`docs/repair-plan-v1.9.22.md`、
+`docs/repair-result-v1.9.22.md`（459 事件 / 49.8 分钟全程跟踪）。
+
+| # | 缺陷 | 修法 |
+|---|---|---|
+| D1 | 符号从不补计价后缀：传裸 `BTC` 时三条取数路径同时失败（CG_IDS 无键 / Binance 400 / OKX 51001），20 币全灭耗时 120 秒 | 三处入口统一走 `lib/symbol-normalize.mjs` 与 `kline_utils.normalize_symbol`，裸符号自动补 `USDT` 并**回显改写**；纯计价币直接报错 |
+| D2 | `fast_analysis.py` 无论成败都 `print ok:True` + `return 0`，调用方只看退出码 → 「20 币全失败」在返回值里表现为完全成功 | `ok` 改为真实判定（全失败 exit 3 + `ok:false` + `failed_symbols`；部分失败 `degraded:true`） |
+| D3 | 不存在的币要跑满 5 host × 3 retry（单币 10s、20 币 120s） | HTTP 400/451 短路整条 host 链；`http_get` 支持 deadline；`--time-budget`（默认 90s）超预算标「未分析·超预算」 |
+| D10 | 落盘快照滞后：digest 说数据新鲜，写盘文件内容止于 10-05，5 个币被误判停更 13 天 | `fetch_klines` 写盘后**回读校验**（bars 与末根时间戳比对，不符 exit 4），输出 `self_check` |
+| D4 | `kexi_out` 里 position 与 indicators 产物 SHA256 相同且无 `pos_90` 字段（文件名与内容错位） | 产物语义校验：从 JSON 实际字段反推数据种类并与文件名比对，不符标 `semantic_mismatch` 且不自动改名 |
+| D5 | `CG_IDS` 是硬编码 15 项白名单且为唯一来源，表外币必然失败 | 降级为速查缓存；未命中查 CoinGecko 全量币表（实测 22339 项）并缓存 7 天；同名多候选按市值裁决，拿不到市值就列候选**拒绝猜测**；按规则 26 拆为独立模块 `cg_registry.py` |
+| D6-D9 | 编排层：Workflow D 触发词漏「选币/挑N个/给我推荐几个」；「仓位诊断」无归属；快速通道判据纯自然语言；建了队却 0 人派活 | 补触发词、新增 Workflow O 仓位体检、快速通道改四条可操作判据、新增「建了队就必须派活」与「等待期不要空转」 |
+
+另新增 `verify_numbers.py` 独立数值复核入口（只读原始 K 线重算指标/位置，与
+`indicators`/`position` 产物逐项比对，相对容差 0.5%，可 `--check rsi14=31.7` 核对单个数字）——
+现场取证里主理人一轮会话调了 25 次 pwsh、14 次内联 `python -c` 直接打交易所接口复算，
+而人设明写「禁止手写 Python」；冲突根因是没有正规复核入口。
+
+`test-v1922-fixes.mjs` 104 项回归（含 JS/Python 符号规范化逐项一致性断言）；
+`fetch_klines.py` 拆分后 538 行、`cg_registry.py` 独立，均守住 600 行上限。
+
 ## v1.9.21（2026-10-18）— 预设在 DSH 0.2.1 上加载失败：角色人格写在已删除字段上
 
 用户重启 DSH 后报「kexi-crypto 依然加载失败」。用**真实 dsh-app-boot 在进程内
@@ -689,7 +816,7 @@ regime 是**市场级状态**；同一时刻 BTC 单币研判可以是「震荡�
 
 ### 1. 卡片标题栏印当前插件版本
 
-![版本徽标](.kexi-test-tmp/kexi-ver-badge.png)
+> （当时截图存于 `.kexi-test-tmp/`，该目录不入库，故此处不嵌图；以文字记录：卡片标题栏显示 `v1.6.4` 版本徽标。）
 
 起因是一次**很难自证**的排查：用户界面上关系图标签页是新的（客户端文件从磁盘读，
 刷新即生效），但服务端从不返回 `graph` 字段、节点 kind 仍是旧的 `team_member`——

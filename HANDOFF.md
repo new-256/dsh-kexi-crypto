@@ -1,8 +1,36 @@
 # 交接文档 · HANDOFF
 
 > 面向**接手这个项目的新会话/新人**。先读完 §1–§4 再动手。
-> 最后更新：2026-10-18，版本 **v1.9.21**
+> 最后更新：2026-11-15 17:11（北京时间，来源 timeapi.io），版本 **v1.9.24**
 > 版本演进见 `CHANGELOG.md`；面向使用者的说明见 `README.md` / `INSTALL.md`。
+>
+> **v1.9.24 适配 DSH 0.2.2（本轮修复，必读）**：
+> DSH 0.2.2-rc.3（2026-11-13 由 0.2.1-alpha.5 升级）启动后插件 GUI 显示「加载失败」，
+> 真因是 `cordis.patch.yml` `delegation` 组的 `tool-subagent-list-agents` 行
+> （`@deepseek-ai/dsh-tool-subagent-control/list-agents`）——该子路径导出在 0.2.2
+> 已从 exports 移除，cordis loader 报 `tool-subagent-list-agents ... never started`，
+> 整个 kexi-crypto 预设被判 BROKEN。修复：删除该行（`list_agents` 已由
+> `dsh-tool-subagent-control` 主入口统一注册，由上方 `tool-subagent-control` 行覆盖）。
+> 详见 `logs/debug/20261115-v1924-list-agents-load-failure.md`。
+>
+> **v1.9.23 委派工具面收敛（必读，本轮唯一破坏性变更）**：
+> ① delegation 组 6 个 `dsh-tool-subagent` 行 → **1 行**（`toolName: subagent` +
+>   `allowedAgentPresets` 5 个 `kexi-member-*`）；上游据此派生带枚举的
+>   `agent_preset` 参数，**工具名不再是身份信号**；
+> ② 成员身份唯一真源 `lib/members.mjs`（preset id → 代号/中文名/角色），
+>   host/client/门禁三方引用同一张表，`verify.mjs` 做双向集合断言；
+>   运行时身份来自子会话 `header.agentPreset` 与 `agent-preset/selected` 事件，
+>   拿不到时显式标「身份未识别」并在映射到达后回填 label+icon+member；
+> ③ 内部成员预设不再出现在 GUI 选择器：host 侧包裹 `agentPresets.remoteExportList`
+>   （见 `lib/preset-roster.mjs`），`list()/readDocument()/resolve()/mount()` 一律不动；
+> ④ ⚠ `export const inject = ['agentPresets']` 的**爆炸半径**：该服务缺失时
+>   kexi-dashboard（状态灯 + 设置面板 + 活动流）**整插件不激活**。这是刻意取舍：
+>   没有 roster 就无法安全实现 ③，宁可整插件显式不激活（loader 可见），
+>   也不要"亮着灯但内部预设泄漏给用户"的半残状态。`check-preset-mount.mjs`
+>   断言本插件确实激活，防止这条静默失效；
+> ⑤ ⚠ v1.9.23 未修的不对称（体检 P1-4）：**持久团队成员继承主理人预设、拿主理人
+>   全套工具**；只有按需委派（`subagent(agent_preset=…)`）的成员才是裁剪后的
+>   角色预设。角色活优先走 `subagent(agent_preset=…)`；持久成员适合长任务占位。
 >
 > **v1.9.19–v1.9.21 三连修（DSH 0.2.1-alpha.5 适配，必读）**：
 > ① v1.9.19 persona 模板 `{{cwd}}` 变量已注册删除 → 只留 `{{model}}`；
@@ -54,9 +82,12 @@
 
 ```
 home-plugin/dsh-kexi-crypto/
-  cordis.patch.yml      ← 插入 host 路由 + 5 人团队人设（persona）
+  cordis.patch.yml      ← host 路由行 + 5 个内部成员预设 + 主预设
   lib/index.mjs         ← HOST：/activity /status /settings /cex 路由、卡片数据源
   lib/client.js         ← CLIENT：状态灯 + 三个弹窗 + 设置面板（浏览器内 React）
+  lib/members.mjs       ← 五位成员身份的**唯一真源**（preset id → 代号/中文名/角色）
+  lib/preset-roster.mjs ← 设计 B：包裹 agentPresets.remoteExportList，隐藏内部预设
+  member-personas/*.md  ← 五个成员预设的人格正文（真源，别只改 yml）
 preset/kexi-crypto/
   kexi-plugin.mjs       ← PRESET：全部 kexi_* 工具定义、脚本白名单、policy
   skills/
@@ -184,6 +215,15 @@ Binance 对本机 451（见 §7）时降级到 CoinGecko（22 根、4 天粒度�
 `test-hooks-order.mjs` 第一版永远绿——它把嵌套回调里的 `if(x) return y`
 误判成函数早退。**注入违规验证它确实会失败**这一步是必须的。
 
+### 6.6 上游事件的"第二个参数"可能根本不存在（v1.9.23 实测）
+
+`ctx.on('subagent/start', (identity, parent) => …)` 的 `parent` **永远收不到实参**：
+上游 lifecycle 分发只调 `callback(info)`，cordis dispatch 把 args[1] 剥成 `thisArg`。
+旧代码 `parent && parent.id` 恒假 → 节点回落到 `identity.id`（成员自己的 session id）
+→ 成员启动/结束节点写进**成员自己的桶**，主理人卡片看不到。
+父会话要从子会话 `header.parentSession` 反查（`subagentHome()`）。
+教训：**别用"看起来像成对"的形参推断事件签名**——去读 emit 方与 dispatch 方。
+
 ---
 
 ## 7. 环境事实（会反复遇到）
@@ -206,7 +246,10 @@ Binance 对本机 451（见 §7）时降级到 CoinGecko（22 根、4 天粒度�
 
 | 脚本 | 守住什么 |
 |---|---|
-| `verify.mjs` | 静态接线：人设/policy/工具参数/白名单/技能 frontmatter + `node --check` |
+| `verify.mjs` | 静态接线：人设/policy/工具参数/白名单/技能 frontmatter + `node --check`；v1.9.23 起含 delegation 单行契约、成员身份双向集合断言与"旧 6 行形态必须判坏"负对照（取不到 js-yaml 直接红，不再静默跳过） |
+| `test-preset-contract.mjs` | 对**真实安装包** `Config` 校验委派行；v1.9.23 改单行 + 三条负对照 |
+| `test-preset-roster.mjs` | **内部成员预设隐藏**（v1.9.23）：上游映射仍在、过滤语义、5 条负对照、dispose 可逆 |
+| `check-preset-mount.mjs` | **发版手动**：真实引导后断言插件已激活、roster 已隐藏、内部 list/readDocument 完整、委派行恰好 1 个 |
 | `test-runtime.mjs` | 行为回归主套件（160 项） |
 | `test-card-props.mjs` | 卡片传值 + 轮询失败可见性 |
 | `test-card-kexi-filter.py` | **卡片只显 kexi 相关**（33 项：白名单、fail-closed、建队合并、sessionId） |
@@ -242,6 +285,12 @@ Binance 对本机 451（见 §7）时降级到 CoinGecko（22 根、4 天粒度�
 
 ## 9. 已知未闭环的问题
 
+0. **⚠ v1.9.23：`inject=['agentPresets']` 的爆炸半径**。该服务缺失时 host 插件
+   （状态灯 + 设置面板 + 活动流）**整插件不激活**——这是为隐藏内部预设付出的
+   显式代价，不是缺陷：宁可 loader 里标红，也不要"亮着灯却把内部成员预设泄漏给
+   用户"。`check-preset-mount.mjs` 第 0 步断言本插件确实激活，防止它静默失效。
+   另：**持久团队成员继承主理人预设、拿全套工具**，只有按需委派成员是裁剪角色面
+   （体检 P1-4，本轮未修）；角色活优先用 `subagent(agent_preset=…)`。
 1. **卡片是否真的好了，需要用户在重启后确认**。代码侧已修（传值 + hooks + 失败可见）
    并有回归测试，但**我无法访问用户浏览器**（GUI 需 token、浏览器桥未连接），
    所以"用户视角修好了"尚未被证实过。→ 下一步第一件事就是问用户。

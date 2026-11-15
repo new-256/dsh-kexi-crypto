@@ -26,8 +26,14 @@ for (const p of [join(REACT, 'react/umd/react.development.js'),
 // ── 1. 用真 host 跑出真实 graph ────────────────────────────────────────────
 const routes = new Map(), handlers = new Map()
 const fakeWs = { register: (r) => { routes.set(r.path, r); return () => routes.delete(r.path) } }
+// v1.9.23：设计 B 包裹 agentPresets.remoteExportList，夹具必须提供该服务
+const fakePresets = {
+  async list() { return [] },
+  async remoteExportList() { return { presets: [{ id: 'standard', isDefault: true }] } },
+}
 const ctx = {
   on(n, fn) { if (!handlers.has(n)) handlers.set(n, []); handlers.get(n).push(fn); return () => { } },
+  get(n) { return n === 'agentPresets' ? fakePresets : undefined },
   inject(_d, cb) { cb({ get: (n) => (n === 'webServer' ? fakeWs : undefined), effect: (fn) => { const d = fn(); return typeof d === 'function' ? d : () => { } } }) },
   effect(fn) { const d = fn(); return typeof d === 'function' ? d : () => { } },
 }
@@ -58,7 +64,13 @@ for (const m of MEMBERS) {
   emit('session/event', lead, { type: 'team/member', data: { teamId: 'T', member: { id: m.id, name: m.name, description: m.role, provider: 'spawn', context: 'fresh', phase: m.name === 'zhengfu' ? 'failed' : 'active' } } })
   // 每个成员在自己会话里跑自己的脚本（只有还在跑的和刚跑完的会被判 busy）
   const s = { id: m.id, cwd: 'C:/w/kexi' }
-  emit('session/event', s, { type: 'tool/call', data: { callId: 'c-' + m.name, name: 'kexi_run', arguments: { mode: 'script', script: m.script, symbol: 'ETHUSDT' } } })
+  // v1.9.23（体检 P0-1）：真实 tool/call 的 arguments 是 **JSON 字符串**。
+  // 这里大多数成员喂字符串（线上形态），保留 zhibei 用对象形态作兼容性覆盖——
+  // 只喂对象正是"script 恒 null 却在测试里全绿"的根源。
+  const args = m.name === 'zhibei'
+    ? { mode: 'script', script: m.script, symbol: 'ETHUSDT' }
+    : JSON.stringify({ mode: 'script', script: m.script, symbol: 'ETHUSDT' })
+  emit('session/event', s, { type: 'tool/call', data: { callId: 'c-' + m.name, name: 'kexi_run', arguments: args } })
   if (m.name !== 'wangchao') emit('session/event', s, tres('c-' + m.name, { ok: true, digest: '完成' }))
 }
 // 派活：数脉最长文本，用来试文字是否撑爆节点

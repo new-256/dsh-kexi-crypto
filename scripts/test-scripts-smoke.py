@@ -91,12 +91,36 @@ ck('② 全部脚本 --help 正常退出（argparse 没坏）', not bad_help, ';
 #   只看 traceback 根异常行是否命中【标准库网络层签名】；TypeError/KeyError/
 #   AttributeError/NameError 等业务代码错误仍然硬失败，绝不用"可能是网络"放水。
 import re as _re  # noqa: E402
+
+# ── 异常三分类（P1-1，体检 2026-10-30）────────────────────────────────────
+# 体检实测：同一份代码 10 分钟内三次运行两红一绿，唯一变量是 Binance 那一刻
+# 返回 451 还是 SSL 中断——因为 451/403 不在签名表里，被判成"代码堆栈崩溃"。
+# 门禁非确定性 = 团队开始"习惯性忽略红" = 门禁失效，与"测试全绿线上失效"等价。
+# 故改成三分类，且三者都有出口：
+#   FAIL：业务代码异常——**永不放水**，即使串里同时出现网络字样也硬失败；
+#   SKIP：受限网络签名——显式打印脚本名 + 具体原因，计入汇总，并受 ⑦⑧ 阈值约束
+#         （SKIP 一旦无阈值就会退化成"新的永远绿"）；
+#   INFO：无参挂起（backtest/news_watch 等）——保持原状，见下方说明。
+# 业务类名只收"网络不可能产生"的那些：ValueError/OSError 会从解析与 IO 层冒出，
+# 拿它们当业务铁证会把真网络失败误判成红，故不入表。
+_BIZ_SIG = _re.compile(
+    r'\b(?:TypeError|KeyError|AttributeError|NameError|UnboundLocalError'
+    r'|ImportError|ModuleNotFoundError|SyntaxError|IndentationError|TabError'
+    r'|IndexError|ZeroDivisionError|RecursionError|NotImplementedError'
+    r'|AssertionError|StopIteration)\b')
+# 受限网络签名：含本机两种真实形态 451（Binance）/403（Bybit），见 HANDOFF §7。
 _NET_SIG = _re.compile(
     r'urlopen error|\[SSL:|Connection(?:Reset|Refused|Aborted)?Error'
-    r'|timed? ?out|Failed to establish a new connection|getaddrinfo failed'
-    r'|Name or service not known|Temporary failure in name resolution'
+    r'|Connection (?:reset|refused)|timed? ?out|Failed to establish a new connection'
+    r'|getaddrinfo failed|Name or service not known|Temporary failure in name resolution'
     r'|nodename nor servname|RemoteDisconnected|Max retries exceeded'
-    r'|HTTP Error (?:429|5\d\d)', _re.IGNORECASE)
+    r'|HTTP Error (?:451|403|429|5\d\d)', _re.IGNORECASE)
+# SKIP 率阈值：超过它就整步失败。取 20% 是因为 40 个脚本里只有
+# new_listing/screener/wallet_watch 等少数会裸跑联网，真到 8 个以上说明
+# "环境受限"已经吃掉太多覆盖面，必须人工裁决而不是继续放绿。
+SKIP_RATIO_MAX = 0.20
+# 同一脚本连续 N 次运行都 SKIP → 整步失败（防止长期 451/403 被当成常态）。
+SKIP_STREAK_MAX = 3
 
 
 def _traceback_root(out):
@@ -106,8 +130,29 @@ def _traceback_root(out):
     return lines[-1] if lines else ''
 
 
+def _classify(root):
+    """把根异常行分成 ('SKIP', 原因) 或 ('FAIL', 原因)。
+
+    业务异常优先判定：网络失败被包进 TypeError/KeyError 时仍然是代码缺陷，
+    不允许因为串里还带着 "timed out" 就降级成 SKIP。
+    """
+    if _BIZ_SIG.search(root):
+        return 'FAIL', root[:100]
+    if _NET_SIG.search(root):
+        m = _re.search(r'HTTP Error (\d{3})', root)
+        if m:
+            return 'SKIP', 'HTTP %s' % m.group(1)
+        # 没有 HTTP 码的网络层错误：用命中的签名片段说明是哪一类
+        m = _re.search(r'\[SSL:[^\]]*\]|urlopen error|Max retries exceeded'
+                       r'|getaddrinfo failed|Name or service not known'
+                       r'|timed? ?out|Connection (?:reset|refused)'
+                       r'|Connection(?:Reset|Refused|Aborted)?Error', root, _re.IGNORECASE)
+        return 'SKIP', (m.group(0) if m else 'network').strip()
+    return 'FAIL', root[:100]
+
+
 stack_trace = []
-net_fail = []
+skips = []          # [(脚本名, 原因)] —— 显式记录，绝不静默丢弃
 hung = []
 for f in targets:
     try:
@@ -121,26 +166,86 @@ for f in targets:
         continue                      # 无必填参数，正常退出
     out = (r.stdout or '') + (r.stderr or '')
     if 'Traceback (most recent call last)' in out:
-        root = _traceback_root(out)
-        if _NET_SIG.search(root):
-            net_fail.append(f)        # 裸跑联网 + 网络不可达：环境问题，非入口缺陷
+        kind, reason = _classify(_traceback_root(out))
+        if kind == 'SKIP':
+            skips.append((f, reason))
+            print('  SKIP  受限网络 → %s（%s）' % (f, reason))
         else:
-            stack_trace.append('%s → %s' % (f, root[:100]))
+            stack_trace.append('%s → %s' % (f, reason))
 ck('③ 缺参数时是干净的 argparse 报错，不是 Python 堆栈',
    not stack_trace, '堆栈崩溃: %s' % stack_trace[:4])
-# ⚠ 无参挂起 / 网络快速失败均降级为 **INFO**，不算失败：
-#   backtest / new_listing / news_watch / screener 等在 main() 里会先联网，
-#   裸跑要么进入长等待（挂起），要么快速抛出网络层错误（断网/SSL 中断）。
-#   但**流水线从不裸调它们**（都有必填 --input/--symbol 或 kexi_run 结构化参数），
-#   所以这不是正常使用路径的缺陷，只是「模型万一漏传参数」时多烧一次超时 /
-#   看到一次网络报错。硬判失败会逼着去改这些脚本的联网逻辑——那会把「裸跑会
-#   联网」这个既有行为也改掉。**如实记录，不假装。** 真·代码堆栈仍硬失败（见上）。
+# ⚠ 无参挂起降级为 **INFO**（保持 v1.9.7 原判定）：
+#   backtest / news_watch 等在 main() 里会先联网，裸跑进入长等待（挂起）。
+#   流水线从不裸调它们（都有必填 --input/--symbol 或 kexi_run 结构化参数），
+#   所以这不是正常使用路径的缺陷，只是「模型万一漏传参数」时多烧一次超时。
+#   反之**快速抛出的网络层错误不再沉默**：它是 SKIP，要打印、计数、受阈值管。
 if hung:
     print('  INFO  无参运行会挂起(>25s)的脚本: %s' % ', '.join(hung))
     print('        流水线从不裸调它们，但模型漏参时会多烧一次超时。')
-if net_fail:
-    print('  INFO  无参裸跑联网、当前网络快速失败的脚本: %s' % ', '.join(net_fail))
-    print('        根异常为标准库网络层错误（非代码堆栈）；流水线从不裸调它们。')
+if skips:
+    print('  SKIP  受限网络（裸跑联网 + 当前网络受限，非代码堆栈）: %s'
+          % ', '.join('%s → %s' % (s, r) for s, r in skips))
+    print('        流水线从不裸调它们；SKIP 计入下方汇总并受 ⑦⑧ 阈值约束。')
+
+# ── ⑦ 未验证率阈值：SKIP 与挂起都必须计数，不得退化成"永远绿" ──────────────
+# 挂起（TimeoutExpired）**不属于** SKIP 豁免：它连"缺参应快速报错"都没证明，
+# 所以和 SKIP 一样是"未验证"。二者合计超阈值即整步失败——环境再差也不能让
+# 门禁在"大部分脚本其实没验到"的情况下继续报绿。
+_total = len(targets)
+_unverified = len(skips) + len(hung)
+_ratio = (_unverified / _total) if _total else 0.0
+ck('⑦ 未验证率（SKIP+挂起）≤ %d%%（SKIP/挂起不得退化成永远绿）'
+   % int(SKIP_RATIO_MAX * 100),
+   _ratio <= SKIP_RATIO_MAX,
+   '未验证 %d/%d = %.1f%%（阈值 %.0f%%）: SKIP=[%s] 挂起=[%s]'
+   % (_unverified, _total, _ratio * 100, SKIP_RATIO_MAX * 100,
+      ', '.join('%s → %s' % (s, r) for s, r in skips) or '无',
+      ', '.join(hung) or '无'))
+
+# ── ⑧ 连续 SKIP 检测：同一脚本连续 N 次运行都 SKIP → 整步失败 ──────────────
+# 计数落盘到 docs/evidence/（scripts 之外，不写用户目录）。文件损坏/不可写
+# 一律按失败处理——这个保护本身不允许静默失效（规则 1）。
+_STREAK_PATH = (os.environ.get('KEXI_SMOKE_STREAK_FILE')
+                or os.path.join(HERE, '..', 'docs', 'evidence',
+                                'smoke-skip-streak.json'))
+
+
+def _load_streaks(path):
+    if not os.path.exists(path):
+        return {}
+    with open(path, encoding='utf-8') as fh:
+        doc = json.load(fh)
+    if not isinstance(doc, dict):
+        raise ValueError('计数文件应为 {脚本名: 连续SKIP次数} 的 JSON 对象')
+    return {str(k): int(v) for k, v in doc.items()}
+
+
+def _save_streaks(path, data):
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    tmp_path = path + '.tmp'
+    with open(tmp_path, 'w', encoding='utf-8') as fh:
+        json.dump(data, fh, ensure_ascii=False, indent=2, sort_keys=True)
+    os.replace(tmp_path, path)
+
+
+try:
+    _prev = _load_streaks(_STREAK_PATH)
+    _skip_names = set(s for s, _ in skips)
+    _cur = {}
+    for _name in sorted(set(_prev) | _skip_names):
+        _n = (_prev.get(_name, 0) + 1) if _name in _skip_names else 0
+        if _n:
+            _cur[_name] = _n
+    _save_streaks(_STREAK_PATH, _cur)
+    _hot = sorted(k for k, v in _cur.items() if v >= SKIP_STREAK_MAX)
+    ck('⑧ 没有脚本连续 %d 次运行都 SKIP' % SKIP_STREAK_MAX, not _hot,
+       '连续 SKIP 计数: %s（记录文件 %s）'
+       % (', '.join('%s×%d' % (k, _cur[k]) for k in sorted(_cur)) or '无',
+          _STREAK_PATH))
+except Exception as _e:                                    # noqa: BLE001
+    ck('⑧ 没有脚本连续 %d 次运行都 SKIP' % SKIP_STREAK_MAX, False,
+       '连续 SKIP 计数不可用（禁止静默放弃该保护）: %s（%s）'
+       % (_STREAK_PATH, _e))
 
 # ── ④ 白名单内脚本必须真的可执行（不是只写在名单里）─────────────────────
 plugin = open(os.path.join(HERE, '..', 'preset', 'kexi-crypto', 'kexi-plugin.mjs'),
@@ -223,9 +328,17 @@ ck('⑥ stdout 末行是紧凑 JSON（lastJsonLine 可解析）', not not_json_t
    '; '.join(not_json_tail[:2]))
 
 # ── 汇总 ──────────────────────────────────────────────────────────────────
+# 汇总行必须自解释：SKIP（受限网络）与挂起（INFO，未验证）都要出现在同一行里，
+# 否则"11/11 通过"会把真实覆盖面缺口藏起来（体检报告 §P1-1/§P1-6 同一教训）。
 fails = [c for c in checks if not c[1]]
 for name, okv, extra in checks:
     if not okv:
         print('  FAIL  %s   %s' % (name, extra))
-print('test-scripts-smoke: %d/%d 通过' % (len(checks) - len(fails), len(checks)))
+_summary = 'test-scripts-smoke: %d/%d 通过' % (len(checks) - len(fails), len(checks))
+if skips:
+    _summary += ', %d 项 SKIP（受限网络：%s）' % (
+        len(skips), ', '.join('%s → %s' % (s, r) for s, r in skips))
+if hung:
+    _summary += ', %d 项 INFO 无参挂起（未验证：%s）' % (len(hung), ', '.join(hung))
+print(_summary)
 sys.exit(1 if fails else 0)

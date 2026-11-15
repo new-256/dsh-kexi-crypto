@@ -277,6 +277,9 @@ section('单文件行数约束')
 
 for (const [label, p, limit] of [
   ['symbol-normalize.mjs', join(ROOT, 'preset', 'kexi-crypto', 'lib', 'symbol-normalize.mjs'), 600],
+  // v1.9.23 新增的两个模块必须一起守（否则新文件在盲区里长大，规则 26 形同虚设）
+  ['members.mjs', join(ROOT, 'home-plugin', 'dsh-kexi-crypto', 'lib', 'members.mjs'), 600],
+  ['preset-roster.mjs', join(ROOT, 'home-plugin', 'dsh-kexi-crypto', 'lib', 'preset-roster.mjs'), 600],
   ['kline_utils.py', join(SCRIPTS, 'kline_utils.py'), 600],
   ['fetch_klines.py', join(SCRIPTS, 'fetch_klines.py'), 600],
   ['cg_registry.py', join(SCRIPTS, 'cg_registry.py'), 600],

@@ -36,8 +36,14 @@ writeFileSync(fresh, '<html><body>本轮研判结论</body></html>', 'utf8')
 
 const routes = new Map(), handlers = new Map()
 const ws = { register: (r) => { routes.set(r.path, r); return () => routes.delete(r.path) } }
+// v1.9.23：设计 B 包裹 agentPresets.remoteExportList，夹具必须提供该服务
+const fakePresets = {
+  async list() { return [] },
+  async remoteExportList() { return { presets: [{ id: 'standard', isDefault: true }] } },
+}
 const ctx = {
   on(n, f) { if (!handlers.has(n)) handlers.set(n, []); handlers.get(n).push(f); return () => { } },
+  get(n) { return n === 'agentPresets' ? fakePresets : undefined },
   inject(_d, cb) { cb({ get: (n) => (n === 'webServer' ? ws : undefined), effect: (fn) => { const d = fn(); return typeof d === 'function' ? d : () => { } } }) },
   effect(fn) { const d = fn(); return typeof d === 'function' ? d : () => { } },
 }

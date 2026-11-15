@@ -34,7 +34,7 @@ import { dirname, join, isAbsolute } from 'node:path'
 // PLUGIN_VERSION_FALLBACK 是给"读不到文件"兜底的常量。scripts/verify.mjs 会断言它
 // 与 package.json 的 version 一致——这样"忘记同步"会**让测试变红**，
 // 而不是让用户看到过期版本号还找不到原因。
-const PLUGIN_VERSION_FALLBACK = '1.9.22'
+const PLUGIN_VERSION_FALLBACK = '1.9.24'
 let PLUGIN_VERSION = PLUGIN_VERSION_FALLBACK
 try {
   let dir = dirname(fileURLToPath(import.meta.url))
@@ -51,9 +51,15 @@ try {
 } catch (e) { /* 保持 fallback */ }
 import { fileURLToPath } from 'node:url'
 import { homedir } from 'node:os'
+// v1.9.23：成员身份唯一真源 + roster 呈现过滤器（两个模块各只做一件事）
+import { KEXI_MEMBERS, memberOfPreset, isKexiPreset } from './members.mjs'
+import { installPresetRosterFilter } from './preset-roster.mjs'
 
 export const name = 'kexi-dashboard'
-export const inject = []
+// v1.9.23：agentPresets 是设计 B（隐藏内部成员预设）的前置依赖。缺它就无法安全
+// 实现过滤，宁可整插件不激活（loader 里显式可见），也不要在半残状态下跑——
+// 具体取舍见 preset-roster.mjs 顶部注释。
+export const inject = ['agentPresets']
 
 /** 插件根（用于定位默认配置路径）。 */
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -63,13 +69,15 @@ const MAX_EVENTS_PER_SESSION = 120
 /** 会话表上限。 */
 const MAX_SESSIONS = 24
 
-/** 团队成员 id/name → 中文名（v1.5.1 团队动向卡片；v1.5.9 新增证伪红队）。 */
+/**
+ * 团队成员（英文代号）→ 中文名。
+ * v1.9.23：身份由 preset id 数据驱动，唯一真源是 lib/members.mjs；这里只把
+ * 「成员代号 → 中文名」摊平成查找表。**不再登记任何委派工具名**——单委派工具
+ * 之后工具名恒为 `subagent`，拿它当身份信号会让五位成员退化成同一个标签。
+ */
 const MEMBER_CN = {
-  shuma: '数脉', zhibei: '指北', wangchao: '望潮', shouzhuo: '守拙',
-  zhengfu: '证伪', lead: '主理人',
-  market_data_specialist: '数脉', technical_indicators: '指北',
-  trend_forecaster: '望潮', risk_assessor: '守拙',
-  falsification_challenger: '证伪',
+  lead: '主理人',
+  ...Object.fromEntries(KEXI_MEMBERS.map((m) => [m.key, m.cn])),
 }
 /** preset 心跳租约 TTL。 */
 const PRESET_TTL_MS = 75000
@@ -123,15 +131,26 @@ function describeTool(name, args) {
   // 回归测试此前传的是对象，所以测试全绿而线上失效——这里两种形态都吃。
   let a = args
   if (typeof a === 'string') {
-    try { a = JSON.parse(a) } catch { a = {} }
+    // v1.9.23：解析失败不再静默当成 {} —— 那会让委派节点退化成"派发子任务"，
+    // 与"这个工具到底派给了谁"的真问题脱节。把原文留在 __raw 里显式标注。
+    try { a = JSON.parse(a) } catch { a = { __parseError: true, __raw: args } }
   }
   if (!a || typeof a !== 'object') a = {}
   const map = {
     kexi_run: () => {
-      if (a.mode === 'script') {
-        return { icon: '📊', label: `运行 ${a.script || '脚本'}`, detail: Array.isArray(a.args) ? a.args.join(' ') : null }
+      if (a.__parseError) {
+        // 解析失败时必须显式可见：关系图会因此归到「其他工作」，若标签还写
+        // "跑研判流水线"就看不出是参数坏了（体检 P0-1 的同类问题）。
+        return { icon: '📊', label: '跑研判流水线（参数解析失败）', detail: clipStr(String(a.__raw), 80), script: null, parseFailed: true }
       }
-      return { icon: '📊', label: `跑研判流水线 ${a.symbol || ''} ${a.interval || ''}`.trim(), detail: a.symbol || null }
+      // script 字段一并交出：工具层原先只看 data.arguments.script，而真实事件里
+      // arguments 是 **JSON 字符串** → 恒 undefined，关系图的工作分类全部落到
+      // "其他工作"（HANDOFF §6.1 同源坑）。这里用已解析的 a，两种形态都覆盖。
+      const script = a.script || null
+      if (a.mode === 'script') {
+        return { icon: '📊', label: `运行 ${a.script || '脚本'}`, detail: Array.isArray(a.args) ? a.args.join(' ') : null, script }
+      }
+      return { icon: '📊', label: `跑研判流水线 ${a.symbol || ''} ${a.interval || ''}`.trim(), detail: a.symbol || null, script }
     },
     kexi_validate: () => ({ icon: '✅', label: '校验报告契约', detail: a.input || null }),
     kexi_dashboard: () => ({ icon: '🖼️', label: '渲染离线看板', detail: a.input || null }),
@@ -145,7 +164,24 @@ function describeTool(name, args) {
     edit: () => ({ icon: '✏️', label: '编辑文件', detail: a.file_path || a.path }),
     glob: () => ({ icon: '🔍', label: '查找文件', detail: a.pattern }),
     grep: () => ({ icon: '🔎', label: '搜索内容', detail: a.pattern }),
-    subagent: () => ({ icon: '🧑‍🔬', label: `派发子任务 ${a.description || ''}`.trim(), detail: a.description || null }),
+    // v1.9.23：6 个委派工具收敛为 1 个 subagent，成员身份只能从 `agent_preset`
+    // 派生（唯一真源 lib/members.mjs）。四种情况都必须**显式可辨**，文案由回归团
+    // 写死断言，别自创：
+    //   命中成员预设   → `委派 数脉·取数质检`
+    //   args 不是合法 JSON → `委派（参数解析失败）`，detail 回显原始串
+    //   合法但没传 agent_preset → 含 `继承主理人预设`
+    //   agent_preset 是未知 id → 含 `未知预设`，detail 回显该 id 原文
+    subagent: () => {
+      if (a.__parseError) {
+        return { icon: '🧑‍🔬', label: '委派（参数解析失败）', detail: clipStr(String(a.__raw), 80), parseFailed: true, agentPreset: null }
+      }
+      const m = memberOfPreset(a.agent_preset)
+      if (m) return { icon: '👤', label: `委派 ${m.cn}·${m.short}`, detail: clipStr(a.description || a.prompt, 80), member: m.key, agentPreset: m.preset }
+      if (typeof a.agent_preset === 'string' && a.agent_preset) {
+        return { icon: '🧑‍🔬', label: `委派子代理（未知预设）`, detail: clipStr(a.agent_preset, 80), agentPreset: null }
+      }
+      return { icon: '🧑‍🔬', label: '委派子代理（继承主理人预设）', detail: clipStr(a.description || a.prompt, 80), agentPreset: null }
+    },
     subagent_fork: () => ({ icon: '🔱', label: '派发分支子任务', detail: a.description }),
     agy_run: () => ({ icon: '🤖', label: `agy 执行${a.background === false ? '(前台)' : ''}`, detail: clipStr(a.prompt, 90) }),
     agy_continue: () => ({ icon: '🤖', label: 'agy 续跑', detail: clipStr(a.prompt, 90) }),
@@ -172,12 +208,8 @@ function describeTool(name, args) {
   if (fn) {
     try { return fn() } catch { return { icon: '🔧', label: name, detail: null } }
   }
-  // 未知工具：CLI 段（*_run/_continue/_status）与成员工具兜底
+  // 未知工具：CLI 段（*_run/_continue/_status）兜底
   if (/_run$|_continue$|_status$|_quota$/.test(name)) return { icon: '🤖', label: `调用 ${name}`, detail: null }
-  if (/^(market_data_specialist|technical_indicators|trend_forecaster|risk_assessor|falsification_challenger)$/.test(name)) {
-    const cn = { market_data_specialist: '数脉·行情取数', technical_indicators: '指北·技术指标', trend_forecaster: '望潮·趋势预判', risk_assessor: '守拙·风险评估', falsification_challenger: '证伪·唱反调' }[name]
-    return { icon: '👤', label: `委派 ${cn}`, detail: clipStr(a.prompt, 80) }
-  }
   return { icon: '🔧', label: name, detail: null }
 }
 
@@ -237,6 +269,71 @@ export function apply(ctx) {
   // ── 活动流（新增：需求 1） ───────────────────────────────────────────────
   const activity = Object.create(null)   // sessionId -> { id, cwd, name, preset, nodes[], artifactId? }
   const toolStarts = new Map()           // callId -> { sessionId, nodeIndex }
+
+  // ── 成员身份映射（v1.9.23：单委派工具之后工具名不再是身份信号）───────────
+  // 权威信号是**该子会话的 preset id**，两条来源（任一先到即可）：
+  //   · session/event 的 session.header.agentPreset —— 子会话创建时由
+  //     childSessionMeta 写入（dsh-subagent/lib/index.js L348-351）；
+  //   · `agent-preset/selected` 事件 —— 子会话 append 后注册表转发到 app 级
+  //     （dsh-agent-preset-registry/lib/index.js L458-460），第一个参数就是子会话 id。
+  // 拿不到身份时**显式标注未知**并登记节点，映射到达后回填——绝不静默套用
+  // 通用「成员」标签（用户规则 1；这也正是旧实现 label.split(' ')[0] 的病根：
+  // 它把模型自由文本的第一段当成成员名）。
+  const childPreset = new Map()          // childId -> preset id
+  const childParent = new Map()          // childId -> 父会话 id（subagent/start 的 parent 实参不可靠，见下）
+  const childCwd = new Map()             // childId -> 工作目录（决定节点落哪个 cwd 桶）
+  const subagentNodes = new Map()        // childId -> 已落库的 subagent 节点（供回填）
+
+  /**
+   * v1.9.23（体检 P1-5）：`subagent/start` 的第二个形参 `parent` **永远收不到实参**。
+   * 上游 lifecycle.js 只调 `callback(info)`，事件的第二个参数会被 cordis dispatch
+   * 剥成 thisArg（callback(info) 的 info 是唯一实参）。所以旧代码 `parent && parent.id`
+   * 恒假，节点回落到 `idn.id`（成员自己的 session id）→ 成员启动/结束节点被写进
+   * **成员自己的桶**，主理人卡片上根本看不到"谁开始干活了"。
+   * 权威父子关系在子会话 header.parentSession（dsh-subagent 的 childSessionMeta 写入）。
+   */
+  function rememberChildParent(childId, parentSessionId) {
+    if (!childId || !parentSessionId) return
+    childParent.set(String(childId), String(parentSessionId))
+  }
+  /** 解析 subagent 节点该落到哪个会话桶：父会话优先，其次才退回 identity.id。 */
+  function subagentHome(childId, idn) {
+    const pid = (childId && childParent.get(String(childId))) || idn.parentSessionId || idn.sessionId || null
+    const cwd = (childId && childCwd.get(String(childId))) || idn.cwd || ''
+    if (pid) return { id: String(pid), cwd }
+    // 父会话未知：只能落成员自己的桶（至少不丢节点），但标签会显式说明，
+    // 不让它看起来像"主理人卡片上的成员会话"。
+    return { id: String(idn.id || 'subagent'), cwd, orphan: true }
+  }
+  /** 记录子会话的 preset 身份，并在需要时回填已推送的节点。 */
+  function rememberChildPreset(childId, presetId) {
+    if (!childId || typeof presetId !== 'string' || presetId === '') return
+    const key = String(childId)
+    const known = childPreset.get(key)
+    // 同 id 重复上报同身份是常态（每个会话事件都会走一遍），不重复回填。
+    if (known === presetId) return
+    childPreset.set(key, presetId)
+    const node = subagentNodes.get(key)
+    if (node && node.unknownIdentity) {
+      const m = memberOfPreset(presetId)
+      node.unknownIdentity = false
+      node.member = m ? m.key : null
+      node.agentPreset = presetId
+      // icon 与 label 一起回填：只改文字会让节点停在"临时图标"，看起来仍像未识别身份。
+      node.icon = m ? '👤' : '🧑‍🔬'
+      node.label = m
+        ? `委派成员 ${m.cn}·${m.short}`
+        : `成员会话启动（预设 ${presetId}${presetId === 'kexi-crypto' ? '，继承主理人' : ''}）`
+    }
+  }
+  /** 从会话 header 取身份与父子关系：只有子会话（origin=subagent）才有意义。 */
+  function rememberChildSession(session) {
+    const header = session && session.header
+    if (!header || header.origin !== 'subagent') return
+    rememberChildParent(session.id, header.parentSession)
+    if (header.cwd) childCwd.set(String(session.id), String(header.cwd))
+    rememberChildPreset(session.id, header.agentPreset)
+  }
   // ── 最终看板产物（需求：成果在 K析页面直接可见） ─────────────────────────
   const artifacts = new Map()            // id -> { path, name, sessionId }
   let artifactSeq = 0
@@ -760,9 +857,8 @@ export function apply(ctx) {
     // 本包模型工具
     'kexi_run', 'kexi_validate', 'kexi_dashboard', 'kexi_cex',
     'kexi_cli', 'kexi_news', 'kexi_ensure_team',
-    // 成员委派（send_message 的 target 之一即成员）
-    'market_data_specialist', 'technical_indicators', 'trend_forecaster',
-    'risk_assessor', 'falsification_challenger',
+    // 委派（v1.9.23：6 个工具收敛为 1 个，成员身份看 arguments.agent_preset）
+    'subagent',
     // 团队编排
     'send_message', 'list_agents', 'wait_agent', 'spawn_teammate',
     'interrupt_agent', 'team_task_create', 'team_task_list', 'team_task_get',
@@ -785,6 +881,23 @@ export function apply(ctx) {
   function isKexiTool(name) {
     const n = String(name || '')
     return KEXI_TOOLS.has(n) || KEXI_CLI_RE.test(n)
+  }
+  /**
+   * 一次 `subagent` 调用是否属于本团队（v1.9.23）。
+   *
+   * 为什么不能只看工具名：`subagent` 是**通用工具名**，别的预设里的普通子代理
+   * 也用它；只看名字会让非研判会话的子代理在卡片上点亮成"研判进度"（v1.6.1 那类
+   * "没派活却满屏团队进度"的问题）。判据只用 preset id：
+   *   · 显式传了 agent_preset → 它是不是本团队预设（主预设或 kexi-member-*）；
+   *   · 省略 → 子代理继承主理人当前预设，所以看本会话的预设；
+   *   · args 解析失败（JSON 坏了）→ 读不到 agent_preset，退化为看本会话预设；
+   *     节点标签本身已显式写明"参数解析失败"，不会伪装成一次正常委派。
+   */
+  function isKexiSubagentCall(d, presetHint) {
+    if (d && d.parseFailed) return isKexiPreset(presetHint)
+    const explicit = d && typeof d.agentPreset === 'string' ? d.agentPreset : null
+    if (explicit) return isKexiPreset(explicit)
+    return isKexiPreset(presetHint)
   }
   /**
    * 节点是否属于「研判链路」。
@@ -946,7 +1059,9 @@ export function apply(ctx) {
         id,
         cwd,
         name: projectName(cwd) || '未知会话',
-        preset: null,
+        // v1.9.23：会话自己的预设 id。`subagent` 是通用工具名，判断"这次委派算不算
+        // 本团队活动"时，省略 agent_preset 的情形要看会话预设（子代理继承它）。
+        preset: (session && session.header && session.header.agentPreset) || null,
         nodes: [],
         // v1.5.2：桶创建时刻——用于判定"看板是不是本次跑出来的"。
         // 取证：上一轮 17:07 的 bull20_dashboard.html 被挂到 23:30 才开的会话上，
@@ -960,7 +1075,8 @@ export function apply(ctx) {
 
   function pushNode(session, node) {
     const b = bucketFor(session)
-    b.nodes.push({ t: Date.now(), seq: b.nodes.length, ...node })
+    const stored = { t: Date.now(), seq: b.nodes.length, ...node }
+    b.nodes.push(stored)
     if (b.nodes.length > MAX_EVENTS_PER_SESSION) b.nodes.splice(0, b.nodes.length - MAX_EVENTS_PER_SESSION)
     b.updatedAt = Date.now()
     const keys = Object.keys(activity)
@@ -968,6 +1084,9 @@ export function apply(ctx) {
       const stale = keys.map((k) => activity[k]).sort((a, b2) => a.updatedAt - b2.updatedAt)
       for (let i = 0; i < keys.length - MAX_SESSIONS && i < stale.length; i++) delete activity[stale[i].id]
     }
+    // v1.9.23：返回落库后的节点对象。身份映射可能晚于 subagent/start 到达，
+    // 回填时必须改**同一个对象**（改副本则界面永远停在"身份未识别"）。
+    return stored
   }
 
   // ── 团队名册状态（v1.5.1）：per-session 维护"成员在不在、正干什么" ─────────
@@ -994,6 +1113,13 @@ export function apply(ctx) {
       const b0 = bucketFor(session)
       if (!b0.memberCodes || typeof b0.memberCodes !== 'object') b0.memberCodes = {}
       b0.memberCodes[String(mem.id)] = name
+      // v1.9.23：subagent/catalog 不再从自由文本嗅探成员名，持久成员的中文标签
+      // 改由这里登记——代号→中文名走唯一真源（lib/members.mjs 派生的 MEMBER_CN）。
+      // ⚠ 仍写中文名而不是代号：memberIds 是"显示映射"，写代号会变成「→ shuma 派活」。
+      if (MEMBER_CN[name]) {
+        if (!b0.memberIds || typeof b0.memberIds !== 'object') b0.memberIds = {}
+        b0.memberIds[String(mem.id)] = MEMBER_CN[name]
+      }
     }
     t.members[name] = {
       id: String(mem.id || ''),
@@ -1233,6 +1359,8 @@ export function apply(ctx) {
     ctx.on('session/event', (session, event) => {
       try {
         if (!event || typeof event !== 'object') return
+        // 每个子会话的第一条事件就把它的 preset 身份记下来（设计 A 的身份信号）。
+        rememberChildSession(session)
         const type = event.type
         const data = event.data || {}
         switch (type) {
@@ -1256,16 +1384,27 @@ export function apply(ctx) {
             break
           case 'tool/call': {
             const d = describeTool(data.name, data.arguments)
+            const presetHint = bucketFor(session).preset
             const idx = bucketFor(session).nodes.length
             pushNode(session, {
               kind: 'tool', tool: data.name, icon: d.icon,
               label: d.label, detail: d.detail,
               callId: data.callId || null, status: 'running',
-              kexi: isKexiTool(data.name),
+              // v1.9.23 取舍：`subagent` 是**通用工具名**，天然不能单独当 kexi 判据
+              // （别的预设里的普通子代理也会用它）。这里只对 subagent 追加
+              // preset 条件：显式 agent_preset 属于本团队、或省略后继承的是本团队
+              // 主预设时才算 kexi 节点；判据全部来自 preset id，不硬编码工具名。
+              kexi: data.name === 'subagent' ? isKexiSubagentCall(d, presetHint) : isKexiTool(data.name),
+              // v1.9.23：委派身份由 arguments.agent_preset 派生，带上 member/preset
+              // 好让卡片与关系图不必再从中文标签里反推"这活是谁的"。
+              member: d.member || null,
+              agentPreset: d.agentPreset || null,
               // v1.6.2：关系图要按**成员此刻在跑哪个脚本**分类，而成员跑的是
               // `kexi_run` 这个包装器，真正的脚本名（fetch_klines.py / indicators.py）
               // 只存在于 arguments 里。不单独存下来，分类会全部落到「其他工作」。
-              script: (data.arguments && data.arguments.script) || null,
+              // v1.9.23：改由 describeTool 交出已解析结果（arguments 是 JSON 字符串时
+              // 直接读对象属性恒 undefined，这个坑 HANDOFF §6.1 记过一次）。
+              script: d.script || null,
             })
             if (data.callId) toolStarts.set(String(data.callId), { sessionId: String(session && session.id), index: idx })
             break
@@ -1420,16 +1559,21 @@ export function apply(ctx) {
             break
           }
           case 'subagent/catalog': {
-            // data = {version:0, childId, childCreatedAt, mode:'continuable', label:'数脉 · …'}
-            // 成员子会话登记：把 childId → 中文名的映射记进 roster，
-            // 供后续 team/message 事件把 targetId/senderId 翻译成中文名。
-            const label = String(data.label || '')
-            const cn = label.split(' ')[0]
-            if (cn && data.childId) {
-              const b = bucketFor(session)
-              b.memberIds = b.memberIds || {}
-              b.memberIds[String(data.childId)] = cn
-            }
+            // data = {version:0, childId, childCreatedAt, mode:'continuable', label:'…'}
+            // v1.9.23：**不再从 label 里嗅探中文名**。label 是模型写的自由文本
+            // （description 参数），旧实现 `label.split(' ')[0]` 会在模型改写成
+            // "拉取BTC日线" 时把这句话当成成员名。身份只认 childId → preset id；
+            // 持久团队成员（继承主理人预设）的 childId → 代号映射由 team/member
+            // 事件写入，这里按代号查中文名，仍然不猜。
+            const childId = data.childId ? String(data.childId) : ''
+            if (!childId) break
+            const m = memberOfPreset(childPreset.get(childId))
+            if (!m) break
+            const b = bucketFor(session)
+            b.memberIds = b.memberIds || {}
+            b.memberIds[childId] = m.cn
+            b.memberCodes = b.memberCodes || {}
+            b.memberCodes[childId] = m.key
             break
           }
           case 'assistant/message': {
@@ -1460,41 +1604,72 @@ export function apply(ctx) {
 
   // ── 事件订阅：subagent（谁在干活） ───────────────────────────────────────
   try {
-    // 真实签名 emit("subagent/start", identity, parent)：identity={runId,provider,id,local}，
-    // parent=委派方 agent（.id 是主会话 id）。兼容旧的单 payload 形态。
-    ctx.on('subagent/start', (identityOrPayload, parent) => {
+    // 真实签名 emit("subagent/start", identity, parent)：
+    // identity = { runId, provider, id: childId, local } —— **没有** agentType/name
+    // （dsh-subagent/lib/index.js L187-193）。v1.9.23 起身份只从 preset 映射取，
+    // 取不到就显式标「身份未识别」，等映射到达后回填。
+    ctx.on('subagent/start', (identityOrPayload) => {
       try {
         const idn = identityOrPayload || {}
-        const pid = parent && parent.id ? String(parent.id)
-          : (idn.parentSessionId || idn.sessionId || idn.id || 'subagent')
-        const prov = idn.provider
-        const provName = typeof prov === 'string' ? prov : (prov && (prov.name || prov.type)) || ''
-        // 兼容旧的单 payload：agentType/name 直接是成员名 → 映射中文（成员中文名信号；
-        // 真实双参场景下成员名由紧邻的 tool/call 节点"委派 指北…"给出）。
-        const cnName = { market_data_specialist: '数脉', technical_indicators: '指北', trend_forecaster: '望潮', risk_assessor: '守拙', falsification_challenger: '证伪' }[idn.agentType || idn.name] || ''
-        const who = cnName || provName
-        pushNode({ id: pid, cwd: (parent && sessionCwd(parent)) || idn.cwd || '' }, {
-          kind: 'subagent', icon: '🧑‍🔬',
-          label: (cnName ? '委派成员 ' + cnName : '成员会话启动') + (!cnName && who ? '（' + who + '）' : ''),
+        const childId = idn.id ? String(idn.id) : ''
+        const home = subagentHome(childId, idn)
+        const preset = childId ? childPreset.get(childId) : undefined
+        const m = memberOfPreset(preset)
+        const node = pushNode({ id: home.id, cwd: home.cwd }, {
+          kind: 'subagent', icon: m ? '👤' : '🧑‍🔬',
+          label: (m
+            ? `委派成员 ${m.cn}·${m.short}`
+            : (preset
+              ? `成员会话启动（预设 ${preset}${preset === 'kexi-crypto' ? '，继承主理人' : ''}）`
+              : `成员会话启动（身份未识别：${childId ? childId.slice(-8) : '无 childId'}）`))
+            + (home.orphan ? '（父会话未识别）' : ''),
           detail: idn.description || (idn.runId ? 'run ' + String(idn.runId).slice(-8) : null),
           status: 'running',
+          member: m ? m.key : null,
+          agentPreset: preset || null,
+          unknownIdentity: !preset,
         })
-      } catch (e) { /* ignore */ }
+        if (childId) subagentNodes.set(childId, node)
+      } catch (e) { /* 单事件异常不影响宿主 */ }
     })
-    ctx.on('subagent/end', (identityOrPayload, parent) => {
+    ctx.on('subagent/end', (identityOrPayload) => {
       try {
         const idn = identityOrPayload || {}
-        const pid = parent && parent.id ? String(parent.id)
-          : (idn.parentSessionId || idn.sessionId || idn.id || 'subagent')
+        const childId = idn.id ? String(idn.id) : ''
+        const home = subagentHome(childId, idn)
         const msg = idn.lastAssistantMessage
         const tail = Array.isArray(msg) && msg.length ? String(msg[msg.length - 1].text || '').slice(0, 80) : ''
-        pushNode({ id: pid, cwd: (parent && sessionCwd(parent)) || idn.cwd || '' }, {
-          kind: 'subagent_end', icon: '🏁', label: '成员会话结束' + (idn.stopReason ? '：' + idn.stopReason : ''),
+        const m = memberOfPreset(childId ? childPreset.get(childId) : undefined)
+        pushNode({ id: home.id, cwd: home.cwd }, {
+          kind: 'subagent_end', icon: '🏁',
+          label: (m ? `成员 ${m.cn} 会话结束` : '成员会话结束') + (idn.stopReason ? '：' + idn.stopReason : '')
+            + (home.orphan ? '（父会话未识别）' : ''),
           detail: tail || null, status: 'ok',
+          member: m ? m.key : null,
         })
       } catch (e) { /* ignore */ }
     })
   } catch (e) { /* subagent 事件不可用时跳过 */ }
+
+  // ── 成员身份第二来源：agent-preset/selected（设计 A）─────────────────────
+  // 注册表把子会话 appaned 的 `agent-preset/selected` 转发为 app 级事件，
+  // 第一个参数就是子会话 id（dsh-agent-preset-registry/lib/index.js L458-460）。
+  // 与 session.header.agentPreset 互为备份：任一先到都能建立 identity。
+  try {
+    ctx.on('agent-preset/selected', (sessionId, agentPreset) => {
+      try { rememberChildPreset(sessionId, agentPreset) } catch (e) { /* 单事件异常不影响宿主 */ }
+    })
+  } catch (e) { /* 事件不可用：header 那条来源仍在（不静默，见上方 rememberChildSession） */ }
+
+  // ── 设计 B：内部成员预设不出现在 GUI 选择器（v1.9.23）────────────────────
+  // 只包裹对外 roster（agentPresets/list → remoteExportList）；list/readDocument/
+  // resolve/mount/select 一律不动——成员预设仍必须可被委派行引用与挂载。
+  // 任何契约破损都会 throw（插件初始化失败或 roster 请求失败，可见），不静默放行。
+  const presetsSvc = ctx.get('agentPresets')
+  if (!presetsSvc) {
+    throw new Error('kexi-dashboard: agentPresets 服务缺失——内部成员预设无法隐藏，拒绝半残运行')
+  }
+  ctx.effect(() => installPresetRosterFilter(presetsSvc))
 
   // ── preset 状态快照（原有） ──────────────────────────────────────────────
   function mergeSnapshot(snap) {

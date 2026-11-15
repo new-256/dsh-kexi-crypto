@@ -87,12 +87,12 @@
       name: '@deepseek-ai/dsh-agent-preset'
       config:
         id: kexi-member-market-data
-        name: 'K析成员·数脉（内部预设·勿直接选择）'
-        description: >-
-          K析研判团「数脉」行情数据专员的成员预设，仅供 kexi-crypto 主预设经委派
-          工具的 agentPreset 选择，不是独立会话入口；直接选择它只会得到一个
-          没有编排能力的单人成员。
-        order: 501
+        # v1.9.23：description 会被塞进委派工具的 agent_preset 参数说明
+        # （dsh-tool-subagent L234：`${id}: ${description}`），必须单行 ≤30 字；
+        # order 900+ 排在全部用户可选用预设之后；name 标「内部」便于日志辨认。
+        name: '数脉·行情取数（内部）'
+        description: 行情取数与数据质检，团队唯一数据入口
+        order: 901
         plugins:
           - id: persona
             name: '@deepseek-ai/dsh-persona'
@@ -144,12 +144,9 @@
       name: '@deepseek-ai/dsh-agent-preset'
       config:
         id: kexi-member-technical
-        name: 'K析成员·指北（内部预设·勿直接选择）'
-        description: >-
-          K析研判团「指北」技术指标与形态分析师的成员预设，仅供 kexi-crypto 主预设经委派
-          工具的 agentPreset 选择，不是独立会话入口；直接选择它只会得到一个
-          没有编排能力的单人成员。
-        order: 502
+        name: '指北·技术指标（内部）'
+        description: 指标、形态量价、位置与多周期研判
+        order: 902
         plugins:
           - id: persona
             name: '@deepseek-ai/dsh-persona'
@@ -201,12 +198,9 @@
       name: '@deepseek-ai/dsh-agent-preset'
       config:
         id: kexi-member-forecaster
-        name: 'K析成员·望潮（内部预设·勿直接选择）'
-        description: >-
-          K析研判团「望潮」趋势推演师的成员预设，仅供 kexi-crypto 主预设经委派
-          工具的 agentPreset 选择，不是独立会话入口；直接选择它只会得到一个
-          没有编排能力的单人成员。
-        order: 503
+        name: '望潮·趋势推演（内部）'
+        description: 7 日三情景概率与可证伪区间推演
+        order: 903
         plugins:
           - id: persona
             name: '@deepseek-ai/dsh-persona'
@@ -258,12 +252,9 @@
       name: '@deepseek-ai/dsh-agent-preset'
       config:
         id: kexi-member-risk
-        name: 'K析成员·守拙（内部预设·勿直接选择）'
-        description: >-
-          K析研判团「守拙」风控官的成员预设，仅供 kexi-crypto 主预设经委派
-          工具的 agentPreset 选择，不是独立会话入口；直接选择它只会得到一个
-          没有编排能力的单人成员。
-        order: 504
+        name: '守拙·风险定级（内部）'
+        description: 风险定级、实盘风控闸门与战绩复盘
+        order: 904
         plugins:
           - id: persona
             name: '@deepseek-ai/dsh-persona'
@@ -315,12 +306,9 @@
       name: '@deepseek-ai/dsh-agent-preset'
       config:
         id: kexi-member-falsifier
-        name: 'K析成员·证伪（内部预设·勿直接选择）'
-        description: >-
-          K析研判团「证伪」唱反调官的成员预设，仅供 kexi-crypto 主预设经委派
-          工具的 agentPreset 选择，不是独立会话入口；直接选择它只会得到一个
-          没有编排能力的单人成员。
-        order: 505
+        name: '证伪·红队（内部）'
+        description: 攻击结论前提的唱反调官，只做红队
+        order: 905
         plugins:
           - id: persona
             name: '@deepseek-ai/dsh-persona'
@@ -554,14 +542,35 @@
                   headChars: 3072
                   tailChars: 1024
 
-          # ── delegation（角色团，v1.9.21 适配 DSH 0.2.1）───────────────────
+          # ── delegation（角色团，v1.9.21 适配 0.2.1；v1.9.23 收敛为单工具；v1.9.24 删 list-agents 子路径行）─────
           # subagents 注册表与 spawn 后端在 HOST 组合（进程单例）；本组只贡献
           # 委派工具行。0.2.1 的 dsh-tool-subagent 移除了 persona/toolFilter/
           # backgroundMode 配置字段——角色人格与裁剪后的工具面已拆到本补丁
-          # 上方 include 进来的五个成员预设 kexi-member-*，这里每行仅以
-          # agentPreset 引用。maxDepth: 1 = 主理人 depth 0 可派出成员
-          # （childDepth=1），成员自身不能再派（成员预设内也无任何委派行，
-          # 双保险；D9 实测配 0 会在首次委派时报 depth 1 exceeds maxDepth 0）。
+          # 上方声明的五个成员预设 kexi-member-*。
+          #
+          # v1.9.23：**6 行 → 1 行**。旧实现每角色一个工具
+          # （market_data_specialist / technical_indicators / trend_forecaster /
+          #  risk_assessor / falsification_challenger + 通用 subagent），
+          # 模型每次派活要在 6 个语义重叠的工具里选，且"工具名即身份"的假设把
+          # host/client/脚本里的映射全部钉死在工具名上。0.2.1 支持
+          # `allowedAgentPresets`：单行即派生带枚举的 `agent_preset` 参数
+          # （取证：dsh-tool-subagent/lib/index.js L311-322 的 Config、
+          #  L400-404 的 schema 派生、L227-237 用预设 description 生成参数说明、
+          #  L250-256 的取值校验），身份改由 preset id 派生（唯一真源
+          #  lib/members.mjs）。
+          #
+          # v1.9.24：**删除** `tool-subagent-list-agents` 行。DSH 0.2.2 起
+          # dsh-tool-subagent-control 主入口（src/index.ts）已统一注册全部四个
+          # 工具（send_message / interrupt_agent / wait_agent / list_agents），
+          # 且 `/list-agents` 子路径导出已从 exports 移除（仅剩 . / ./src/* /
+          # ./package.json / ./locale/*.json）。该行导致 cordis loader 报
+          # `tool-subagent-list-agents ... never started`，整个 kexi-crypto
+          # 预设被判 BROKEN → GUI「加载失败」（→ 本轮真因）。list_agents
+          # 功能已由上方 tool-subagent-control 行覆盖，无需再声明。
+          #
+          # maxDepth: 1 = 主理人 depth 0 可派出成员（childDepth=1）；成员预设内
+          # 无任何委派工具，成员无法再派（双保险）。不传 agentPreset：模型省略
+          # agent_preset 时子代理继承主理人当前预设（自查/复核路径仍在）。
           - id: delegation
             name: cordis:group
             group: true
@@ -571,61 +580,22 @@
               - id: tool-subagent-control
                 name: '@deepseek-ai/dsh-tool-subagent-control'
 
-              - id: tool-subagent-list-agents
-                name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
-
-              # 通用委派（主理人自查/复核用；不带 agentPreset → 子代理继承
-              # 主理人当前预设 kexi-crypto 的工具面与人格）。
+              # 唯一委派工具：成员身份由 preset id 经 agent_preset 参数指定。
+              # ⚠ 这五个 id 必须与 lib/members.mjs 的 MEMBER_PRESET_IDS 及下方
+              #   五个 preset-kexi-member-* 声明行 **完全一致**——verify.mjs 做双向
+              #   集合断言，只改一处会直接红（防止将来加成员时漏改）。
               - id: tool-subagent
                 name: '@deepseek-ai/dsh-tool-subagent'
                 config:
                   provider: spawn
                   toolName: subagent
-
-              # 数脉（行情取数与数据质检，唯一数据入口）：人格与工具面在成员预设 kexi-member-market-data（0.2.1 新架构）
-              - id: member-market-data
-                name: '@deepseek-ai/dsh-tool-subagent'
-                config:
-                  provider: spawn
-                  toolName: market_data_specialist
                   maxDepth: 1
-                  agentPreset: kexi-member-market-data
-
-              # 指北（指标计算/形态量价/位置与多周期研判）：人格与工具面在成员预设 kexi-member-technical（0.2.1 新架构）
-              - id: member-technical
-                name: '@deepseek-ai/dsh-tool-subagent'
-                config:
-                  provider: spawn
-                  toolName: technical_indicators
-                  maxDepth: 1
-                  agentPreset: kexi-member-technical
-
-              # 望潮（7 日三情景概率推演与可证伪区间）：人格与工具面在成员预设 kexi-member-forecaster（0.2.1 新架构）
-              - id: member-forecaster
-                name: '@deepseek-ai/dsh-tool-subagent'
-                config:
-                  provider: spawn
-                  toolName: trend_forecaster
-                  maxDepth: 1
-                  agentPreset: kexi-member-forecaster
-
-              # 守拙（风险定级/实盘闸门/保活监控/战绩复盘）：人格与工具面在成员预设 kexi-member-risk（0.2.1 新架构）
-              - id: member-risk
-                name: '@deepseek-ai/dsh-tool-subagent'
-                config:
-                  provider: spawn
-                  toolName: risk_assessor
-                  maxDepth: 1
-                  agentPreset: kexi-member-risk
-
-              # 证伪（攻击结论前提的唱反调官）：人格与工具面在成员预设 kexi-member-falsifier（0.2.1 新架构）
-              - id: member-falsifier
-                name: '@deepseek-ai/dsh-tool-subagent'
-                config:
-                  provider: spawn
-                  toolName: falsification_challenger
-                  maxDepth: 1
-                  agentPreset: kexi-member-falsifier
+                  allowedAgentPresets:
+                    - kexi-member-market-data
+                    - kexi-member-technical
+                    - kexi-member-forecaster
+                    - kexi-member-risk
+                    - kexi-member-falsifier
 
 
           # ── 交付与其余 model-facing 行 ──────────────────────────────────────

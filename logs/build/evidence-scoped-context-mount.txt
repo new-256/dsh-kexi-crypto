@@ -1,0 +1,66 @@
+﻿# 证据：mount() 要求 scoped context 的源码原文（回归团 Phase 1 抓取）
+# 抓取时间（本机）: 2026-10-30 01:48:31
+# 文件: C:\Users\lcl\AppData\Roaming\DSH Desktop\backend\dsh\node_modules\@deepseek-ai\dsh-agent-preset-registry\lib\index.js
+
+## 1) bind() 里的硬性检查（无 scope 即抛）
+651: 				return generation;
+652: 			}
+653: 		}
+654: 		async bind(ctx, generation) {
+655: 			const key = scopeOf(ctx);
+656: 			if (key === void 0) throw new Error("Agent preset binding requires a scoped context");
+657: 			const binding = this.bindings.get(key);
+658: 			if (binding?.generation === generation) return;
+
+## 2) mount(ctx, id) 方法体（说明它必然走到 bind）
+685: 		*/
+686: 		async mount(ctx, id) {
+687: 			const generation = await this.retain(id);
+688: 			try {
+689: 				await this.bind(ctx, generation);
+690: 				return { id: generation.mount.presetId };
+691: 			} finally {
+692: 				generation.users--;
+693: 				await this.collect(generation);
+694: 			}
+695: 		}
+696: 		/** Join a child to the exact revision retained by its parent.
+
+## 3) scoped ctx 的官方造法：dsh-scope 的 createScope / scopeOf
+# 文件: C:\Users\lcl\AppData\Roaming\DSH Desktop\backend\dsh\node_modules\@deepseek-ai\dsh-scope\lib\index.js
+295: */
+296: function createScope(ctx, key, options) {
+297: 	if (options?.parent !== void 0) bindScopeParent(key, options.parent);
+298: 	const fiber = ctx.plugin(scope);
+299: 	const scoped = fiber.ctx.extend({ [kScope]: key });
+300: 	let disposing;
+301: 	return {
+302: 		ctx: scoped,
+303: 		rawDispose: fiber.dispose,
+304: 		dispose: () => disposing ??= quiesceFiber(fiber)
+305: 	};
+306: }
+307: /**
+308: * Read the nearest scope tag inherited by a context.
+
+310: * @returns its scope key, or `undefined` for an unscoped context.
+311: */
+312: function scopeOf(ctx) {
+313: 	return ctx[kScope];
+314: }
+315: /**
+
+## 4) acquireScope(id) 的签名与返回（拿 key 用）
+775: 		async acquireScope(id) {
+776: 			const generation = await this.retain(id);
+777: 			let disposed = false;
+778: 			return {
+779: 				key: generation.key,
+780: 				[Symbol.asyncDispose]: async () => {
+781: 					if (disposed) return;
+782: 					disposed = true;
+783: 					generation.users--;
+784: 					await this.collect(generation);
+785: 				}
+786: 			};
+787: 		}

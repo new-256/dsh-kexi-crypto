@@ -1,0 +1,11 @@
+At line:1 char:142
++ ... } else { 'IN-GATE: Get-FileHash MISSING' }; 'PSModulePath=' + C:\User ...
++                                                                  ~
+You must provide a value expression following the '+' operator.
+At line:1 char:143
++ ... ; 'PSModulePath=' + C:\Users\lcl\Documents\PowerShell\Modules;C:\Prog ...
++                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Unexpected token 'C:\Users\lcl\Documents\PowerShell\Modules' in expression or statement.
+    + CategoryInfo          : ParserError: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : ExpectedValueExpression
+ 

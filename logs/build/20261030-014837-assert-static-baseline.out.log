@@ -1,0 +1,5 @@
+target            = scripts/test-runtime.mjs
+agent_preset      = 0   (require >= 2)
+subagent-calls    = 0   (require >= 2)
+legacy agentType  = 1   (仅信息：旧身份通道用法计数)
+ASSERT-STATIC: FAIL（agent_preset / subagent tool-call 覆盖不足）

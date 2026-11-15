@@ -1,0 +1,20 @@
+
+> dsh-kexi-crypto@1.9.23 prepack
+> node scripts/verify.mjs
+
+  ✓ package.json dsh-kexi-crypto@1.9.23
+  ✓ 版本四处一致 v1.9.23（package.json/CHANGELOG/README/HANDOFF）
+  ✓ icon 1003 B
+  ✓ plugins 18 行 / 委派工具 1 个 / 成员预设 5 个
+  ✓ customSkillDirs 为值位置 !!js（形态正确）
+  ✓ skills root OK: preset\kexi-crypto\skills
+  ✓ !!js 标量 30/30 可求值（含 profile 根 baseUrl 场景）
+  ✓ v1.2.1 新能力接线检查（活动流 / kexi_cli / 设置面板 / D9 depth / D10 response）
+  ✓ v1.5.1 接线检查（团队动向卡片 / 入场时机 / 币种画像 / 消息面监控）
+  ✓ v1.5.2 接线检查（脚本 CWD / 参数解析 / 等待期 busy / 产物新鲜度 / 派活 target / 批量执行 / 产物溯源）
+  ✓ v1.5.3 接线检查（秒级快研 mode=fast / 先快答再深研纪律）
+  ✓ node --check 全部通过
+  ✓ 技能 frontmatter 合规
+
+verify: PASS (12 顶层键 / 625 行 patch)
+dsh-kexi-crypto-1.9.23.tgz

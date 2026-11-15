@@ -1,0 +1,34 @@
+
+[1. 上游 typert 映射仍是 remoteExportList]
+  ✓ 取到 agentPresets/list 的生成描述符
+  ✓ implementation 仍是 remoteExportList（实际 remoteExportList）——若上游改名，本过滤器静默失效，必须重新设计
+  ✓ 端点命名空间仍是 agentPresets
+
+[2. 过滤语义（只动对外 roster）]
+  ✓ 基线：包裹前 8 行
+  ✓ 包裹落在实例自有属性上（遮蔽原型方法）
+  ✓ 过滤后 3 行（实际 3）
+  ✓ 过滤后不含任何 kexi-member-*
+  ✓ 非成员预设全部保留（没有误伤）
+  ✓ 相对顺序与过滤前一致（order 排序不被破坏）
+  ✓ 返回新对象与新数组（不原地改宿主缓存）
+  ✓ 包裹前的数组未被就地修改
+  ✓ list() 仍返回完整集合（过滤不得下沉到 list()，否则委派引用校验会断）
+  ✓ list() 仍含全部成员预设（readDocument/resolve/mount 的调用方靠它）
+  ✓ 行内其它字段原样保留（isDefault 不被破坏）
+
+[3. 负对照（形状违规一律 fail-loud，不静默放行）]
+  ✓ 无 remoteExportList → 安装即抛错
+  ✓ 服务为 null → 安装即抛错
+  ✓ 重复安装 → 抛错（不静默跳过）
+  ✓ 返回值缺 presets 数组 → 抛错
+  ✓ roster 行缺字符串 id → 抛错（判定不了就顶出来）
+  ✓ 方法被第三方替换后 dispose → 抛错
+
+[4. dispose 精确还原且可逆]
+  ✓ dispose 删掉遮蔽属性（恢复原型方法）
+  ✓ dispose 清掉单进程挂载标记
+  ✓ dispose 后 roster 恢复完整（可逆）
+  ✓ dispose 后可重新安装（标记已清，不会假报重复）
+
+PRESET-ROSTER: PASS

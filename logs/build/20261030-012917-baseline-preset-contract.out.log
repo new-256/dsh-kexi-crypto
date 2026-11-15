@@ -1,0 +1,63 @@
+真实包 @deepseek-ai/dsh-tool-subagent@0.2.1-alpha.5
+  C:\Users\lcl\AppData\Roaming\DSH Desktop\backend\dsh\node_modules\@deepseek-ai\dsh-tool-subagent\lib\index.js
+  ✓ 从真实包源码提取到 apply() 拒绝字段列表（正则未失效）
+  上游 apply 拒绝字段: persona, toolFilter
+  ✓ 负对照前置：拒绝列表含 persona
+  ✓ 负对照前置：拒绝列表含 toolFilter
+  ✓ js-yaml 可从 DSH_BACKEND 解析
+  ✓ 主补丁内联 5 个成员预设声明行，实际 5
+  ✓ preset-kexi-member-market-data 必须排在 preset-kexi-crypto 之前（注册时序）
+  ✓ preset-kexi-member-technical 必须排在 preset-kexi-crypto 之前（注册时序）
+  ✓ preset-kexi-member-forecaster 必须排在 preset-kexi-crypto 之前（注册时序）
+  ✓ preset-kexi-member-risk 必须排在 preset-kexi-crypto 之前（注册时序）
+  ✓ preset-kexi-member-falsifier 必须排在 preset-kexi-crypto 之前（注册时序）
+  ✓ persona 正文文件缺失: member-personas/market-data.md
+  ✓ persona 正文文件缺失: member-personas/technical.md
+  ✓ persona 正文文件缺失: member-personas/forecaster.md
+  ✓ persona 正文文件缺失: member-personas/risk.md
+  ✓ persona 正文文件缺失: member-personas/falsifier.md
+  成员预设声明: kexi-member-market-data, kexi-member-technical, kexi-member-forecaster, kexi-member-risk, kexi-member-falsifier
+  ✓ 应有 6 个 dsh-tool-subagent 行（1 通用+5 成员；两个 *-control 行不同名不计），实际 6
+  ✓ tool-subagent@root/preset-kexi-crypto/delegation 通过真实 Config schema
+  ✓ tool-subagent@root/preset-kexi-crypto/delegation 不含已移除字段 persona
+  ✓ tool-subagent@root/preset-kexi-crypto/delegation 不含已移除字段 toolFilter
+  ✓ member-market-data@root/preset-kexi-crypto/delegation 通过真实 Config schema
+  ✓ member-market-data@root/preset-kexi-crypto/delegation 不含已移除字段 persona
+  ✓ member-market-data@root/preset-kexi-crypto/delegation 不含已移除字段 toolFilter
+  ✓ member-market-data@root/preset-kexi-crypto/delegation 的 agentPreset=kexi-member-market-data 在成员预设文件中有声明
+  ✓ member-technical@root/preset-kexi-crypto/delegation 通过真实 Config schema
+  ✓ member-technical@root/preset-kexi-crypto/delegation 不含已移除字段 persona
+  ✓ member-technical@root/preset-kexi-crypto/delegation 不含已移除字段 toolFilter
+  ✓ member-technical@root/preset-kexi-crypto/delegation 的 agentPreset=kexi-member-technical 在成员预设文件中有声明
+  ✓ member-forecaster@root/preset-kexi-crypto/delegation 通过真实 Config schema
+  ✓ member-forecaster@root/preset-kexi-crypto/delegation 不含已移除字段 persona
+  ✓ member-forecaster@root/preset-kexi-crypto/delegation 不含已移除字段 toolFilter
+  ✓ member-forecaster@root/preset-kexi-crypto/delegation 的 agentPreset=kexi-member-forecaster 在成员预设文件中有声明
+  ✓ member-risk@root/preset-kexi-crypto/delegation 通过真实 Config schema
+  ✓ member-risk@root/preset-kexi-crypto/delegation 不含已移除字段 persona
+  ✓ member-risk@root/preset-kexi-crypto/delegation 不含已移除字段 toolFilter
+  ✓ member-risk@root/preset-kexi-crypto/delegation 的 agentPreset=kexi-member-risk 在成员预设文件中有声明
+  ✓ member-falsifier@root/preset-kexi-crypto/delegation 通过真实 Config schema
+  ✓ member-falsifier@root/preset-kexi-crypto/delegation 不含已移除字段 persona
+  ✓ member-falsifier@root/preset-kexi-crypto/delegation 不含已移除字段 toolFilter
+  ✓ member-falsifier@root/preset-kexi-crypto/delegation 的 agentPreset=kexi-member-falsifier 在成员预设文件中有声明
+  ✓ 恰好 5 个成员行经 agentPreset 引用成员预设，实际 5
+  ✓ 成员预设 5 行，实际 5
+  ✓ kexi-member-market-data 是 dsh-agent-preset 声明行
+  ✓ kexi-member-market-data 内无 subagent 行（成员不可再委派），发现: 无
+  ✓ kexi-member-market-data 挂有 kexi-plugin（成员分析手段）
+  ✓ kexi-member-technical 是 dsh-agent-preset 声明行
+  ✓ kexi-member-technical 内无 subagent 行（成员不可再委派），发现: 无
+  ✓ kexi-member-technical 挂有 kexi-plugin（成员分析手段）
+  ✓ kexi-member-forecaster 是 dsh-agent-preset 声明行
+  ✓ kexi-member-forecaster 内无 subagent 行（成员不可再委派），发现: 无
+  ✓ kexi-member-forecaster 挂有 kexi-plugin（成员分析手段）
+  ✓ kexi-member-risk 是 dsh-agent-preset 声明行
+  ✓ kexi-member-risk 内无 subagent 行（成员不可再委派），发现: 无
+  ✓ kexi-member-risk 挂有 kexi-plugin（成员分析手段）
+  ✓ kexi-member-falsifier 是 dsh-agent-preset 声明行
+  ✓ kexi-member-falsifier 内无 subagent 行（成员不可再委派），发现: 无
+  ✓ kexi-member-falsifier 挂有 kexi-plugin（成员分析手段）
+  ✓ 负对照：旧格式配置被拦截字段数=2（persona+toolFilter），实际 2（persona,toolFilter）
+
+PRESET-CONTRACT: PASS
